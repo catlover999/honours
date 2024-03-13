@@ -1,5 +1,5 @@
 [package]
-name = "filter_dp"
+name = "filter-dp"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,7 +7,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-opendp = "0.4"
+opendp = { version = "0.9", default-features = false }
 wasm-bindgen = "0.2"
 libc = "0.2"
 console_error_panic_hook = { version = "0.1", optional = true }

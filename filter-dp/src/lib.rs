@@ -3,7 +3,6 @@ use libc::{c_char, size_t};
 use std::ffi::{CStr, CString};
 use opendp::error::Fallible;
 use opendp::measurements::laplace::make_laplace;
-use opendp::core::Measurement;
 
 #[wasm_bindgen]
 extern {
