@@ -1,8 +1,7 @@
 use wasm_bindgen::prelude::*;
-use libc::{c_char, size_t};
-use std::ffi::{CStr, CString};
-use opendp::error::Fallible;
-use opendp::measurements::laplace::make_laplace;
+use std::ffi::{CString, c_char};
+use std::slice;
+use std::str;
 
 #[wasm_bindgen]
 extern {
@@ -12,35 +11,33 @@ extern {
 }
 
 #[no_mangle]
-pub extern "C" fn rust_filter(tag: *const c_char, tag_len: size_t, time_sec: u32, time_nsec: u32, record: *const c_char, record_len: size_t) -> *mut c_char {
+pub extern "C" fn rust_filter(
+    tag: *const c_char,
+    tag_len: u32,
+    time_sec: u32,
+    time_nsec: u32,
+    record: *const c_char,
+    record_len: u32,
+)-> *mut c_char {
     // Setup panic hook for better error messages in wasm
     console_error_panic_hook::set_once();
+
     
     unsafe {
         // Convert the record C string to Rust string
-        let record_str = CStr::from_ptr(record).to_string_lossy();
-        let record_value: f64 = match record_str.parse() {
-            Ok(val) => val,
+        let record_slice = slice::from_raw_parts(record as *const u8, record_len as usize);
+        let record_str = match str::from_utf8(record_slice) {
+            Ok(s) => s,
             Err(_) => {
-                log("Failed to parse record to f64");
+                log("Failed to convert record to UTF-8 string");
                 return std::ptr::null_mut();
             },
         };
 
-        // Apply Laplace noise
-        let noisy_value = add_laplace_noise(record_value).unwrap_or_else(|_| {
-            log("Failed to apply Laplace noise");
-            0.0 // You might want to handle this case differently
-        });
+        // TODO
         
         // Convert the noisy value back to a C string
-        let noisy_value_str = noisy_value.to_string();
-        let c_str_noisy = CString::new(noisy_value_str).unwrap();
-        c_str_noisy.into_raw()
+        let c_str_processed = CString::new(record_str).unwrap();
+        c_str_processed.into_raw()
     }
-}
-
-fn add_laplace_noise(value: f64) -> Fallible<f64> {
-    let measurement = make_laplace(1.0)?; // Assuming a scale of 1.0 for simplicity
-    measurement.invoke(value)
 }
