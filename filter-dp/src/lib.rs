@@ -1,14 +1,9 @@
-use wasm_bindgen::prelude::*;
-use std::ffi::{CString, c_char};
+use serde_json::{json, Value};
+use chrono::{Utc, TimeZone, LocalResult, prelude::DateTime};
 use std::slice;
-use std::str;
-
-#[wasm_bindgen]
-extern {
-    // Enable console logging for debugging
-    #[wasm_bindgen(js_namespace = console)]
-    fn log(s: &str);
-}
+use std::os::raw::c_char;
+use std::fs;
+use std::io::{Read, Write};
 
 #[no_mangle]
 pub extern "C" fn rust_filter(
@@ -18,26 +13,26 @@ pub extern "C" fn rust_filter(
     time_nsec: u32,
     record: *const c_char,
     record_len: u32,
-)-> *mut c_char {
-    // Setup panic hook for better error messages in wasm
-    console_error_panic_hook::set_once();
-
+) -> *const u8 {
     
-    unsafe {
-        // Convert the record C string to Rust string
-        let record_slice = slice::from_raw_parts(record as *const u8, record_len as usize);
-        let record_str = match str::from_utf8(record_slice) {
-            Ok(s) => s,
-            Err(_) => {
-                log("Failed to convert record to UTF-8 string");
-                return std::ptr::null_mut();
-            },
-        };
+    // Process tag and record
+    let tag_str: &str = std::str::from_utf8( unsafe { std::slice::from_raw_parts(tag as *const u8, tag_len as usize) } ).expect("Invalid UTF-8 in tag");
+    let message: Value = serde_json::from_slice( unsafe { slice::from_raw_parts(record as *const u8, record_len as usize) } ).expect("Invalid JSON in record");
+    
+    // Process time value. Not used by filter but is required to be passed back
+    let dt_result: LocalResult<DateTime<Utc>> = Utc.timestamp_opt(time_sec as i64, time_nsec);
+    let dt: DateTime<Utc> = match dt_result {
+        chrono::LocalResult::Single(dt) => dt,
+        _ => panic!("Invalid timestamp"), // Handle the None case or ambiguity
+    };
+    let time: String = dt.format("%Y-%m-%dT%H:%M:%S.%9f %z").to_string();
 
-        // TODO
-        
-        // Convert the noisy value back to a C string
-        let c_str_processed = CString::new(record_str).unwrap();
-        c_str_processed.into_raw()
-    }
+    let message: Value = json!({
+        "time": time,
+        "tag": tag_str,
+    });
+
+
+  let buf: String = message.to_string();
+  buf.as_ptr()
 }
