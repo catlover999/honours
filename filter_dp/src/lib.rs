@@ -6,7 +6,7 @@ use std::fs;
 use std::io::{Read, Write};
 
 #[no_mangle]
-pub extern "C" fn rust_filter(
+pub extern "C" fn filter_dp(
     tag: *const c_char,
     tag_len: u32,
     time_sec: u32,
