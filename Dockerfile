@@ -12,12 +12,12 @@ RUN cargo chef cook --release --target wasm32-wasi --recipe-path recipe.json
 RUN cargo build --release --target wasm32-wasi
 
 # 2. Fluent Bit Stage
-FROM cr.fluentbit.io/fluent/fluent-bit:latest as fluent-bit
+FROM cr.fluentbit.io/fluent/fluent-bit:latest-debug as fluent-bit
 WORKDIR /fluent-bit
 COPY --from=builder /filter_dp/target/wasm32-wasi/release/filter_dp.wasm .
 COPY fluent-bit.conf .
 COPY input-data input-data
-ENTRYPOINT ["fluent-bit", "-c", "fluent-bit.conf"]
+RUN bin/fluent-bit -c fluent-bit.conf
 
 # 3. Evaualtion stage
 FROM docker.io/jupyter/minimal-notebook:latest as notebook
