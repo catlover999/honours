@@ -1,10 +1,18 @@
+use chrono::{TimeZone, Utc};
+use rand::{rngs::StdRng, thread_rng, RngCore, SeedableRng};
+use rv::{
+    dist::{Distribution, Distribution::*, Gaussian, Laplace},
+    prelude::Rv,
+};
 use serde::Deserialize;
 use serde_json::{json, Value};
-use chrono::{Utc, TimeZone};
-use std::{collections::{HashMap, hash_map::DefaultHasher}, slice, os::raw::c_char, str, hash::{Hash, Hasher}};
-use rv::{dist::{Laplace, Gaussian, Distribution, Distribution::*}, prelude::Rv};
+use std::{
+    collections::{hash_map::DefaultHasher, HashMap},
+    hash::{Hash, Hasher},
+    os::raw::c_char,
+    slice, str,
+};
 use std::{fs::File, io::Read, path::Path};
-use rand::{RngCore, SeedableRng, rngs::StdRng, thread_rng};
 
 //use toml::from_str;
 
@@ -17,59 +25,74 @@ pub extern "C" fn filter_dp(
     record: *const c_char,
     record_len: u32,
 ) -> *const u8 {
-    
     // Process tag and record
-    let tag: String = str::from_utf8( unsafe { slice::from_raw_parts(tag as *const u8, tag_len as usize) } ).expect("Invalid UTF-8 in tag").to_string();
-    let record: Value = serde_json::from_slice( unsafe { slice::from_raw_parts(record as *const u8, record_len as usize) } ).expect("Invalid JSON in record");
-    
+    let tag: String =
+        str::from_utf8(unsafe { slice::from_raw_parts(tag as *const u8, tag_len as usize) })
+            .expect("Invalid UTF-8 in tag")
+            .to_string();
+    let record: Value = serde_json::from_slice(unsafe {
+        slice::from_raw_parts(record as *const u8, record_len as usize)
+    })
+    .expect("Invalid JSON in record");
+
     // Apply noise to the records
     let mut noisy_records: Value = apply_noise_to_records(&tag, record);
 
     // Process time value. Not used by filter but is required to be passed back
-    let time: String = Utc.timestamp_opt(time_sec as i64, time_nsec)
-    .single()
-    .expect("Invalid timestamp")
-    .format("%Y-%m-%dT%H:%M:%S.%9f %z")
-    .to_string();
+    let time: String = Utc
+        .timestamp_opt(time_sec as i64, time_nsec)
+        .single()
+        .expect("Invalid timestamp")
+        .format("%Y-%m-%dT%H:%M:%S.%9f %z")
+        .to_string();
 
     if let Value::Object(ref mut map) = noisy_records {
         map.insert("time".to_string(), Value::String(time));
         map.insert("tag".to_string(), Value::String(tag));
     }
 
-  noisy_records.to_string()
-  .as_ptr()
+    noisy_records.to_string().as_ptr()
 }
 
 #[derive(Deserialize)]
 struct OptionalSettings {
-    rng_seed: Option<String>
+    rng_seed: Option<String>,
 }
 
 #[derive(Deserialize)]
 #[serde(tag = "type")]
 enum Noise {
-    Laplace { mu: f64, b: f64, #[serde(flatten)] optional: OptionalSettings },
-    Gaussian { mu: f64, sigma: f64, #[serde(flatten)] optional: OptionalSettings },
+    Laplace {
+        mu: f64,
+        b: f64,
+        #[serde(flatten)]
+        optional: OptionalSettings,
+    },
+    Gaussian {
+        mu: f64,
+        sigma: f64,
+        #[serde(flatten)]
+        optional: OptionalSettings,
+    },
 }
 
 fn add_noise_to_value(distribution: Distribution, value: f64, optional: &OptionalSettings) -> f64 {
     // We need noise to choose a value on the distribution. This can optionally be seeded
-    let mut rng: Box<dyn RngCore>  = match &optional.rng_seed {
+    let mut rng: Box<dyn RngCore> = match &optional.rng_seed {
         Some(seed) => {
             let mut hasher = DefaultHasher::new();
             seed.hash(&mut hasher);
             let seed_hash = hasher.finish();
             Box::new(StdRng::seed_from_u64(seed_hash))
-        },
+        }
         None => Box::new(thread_rng()),
     };
 
     // Creates the noise from the distribution
     let noise: f64 = distribution.draw(&mut rng).into();
     // Returns the noisy value
-    value+noise
-} 
+    value + noise
+}
 
 fn apply_noise_to_records(filename: &String, mut records: Value) -> Value {
     let filepath: String = format!("{}.toml", filename);
@@ -92,20 +115,34 @@ fn apply_noise_to_records(filename: &String, mut records: Value) -> Value {
                                     // Match against the setting type
                                     match setting {
                                         Noise::Laplace { mu, b, optional } => {
-                                            let laplace = Laplace::new(*mu, *b).expect("Invalid Laplace parameters");
-                                            *record_value = json!(add_noise_to_value(Laplace(laplace), x, optional));
-                                        },
-                                        Noise::Gaussian { mu, sigma, optional } => {
-                                            let gaussian = Gaussian::new(*mu, *sigma).expect("Invalid Gaussian parameters");
-                                            *record_value = json!(add_noise_to_value(Gaussian(gaussian), x, optional));
-                                        },
+                                            let laplace = Laplace::new(*mu, *b)
+                                                .expect("Invalid Laplace parameters");
+                                            *record_value = json!(add_noise_to_value(
+                                                Laplace(laplace),
+                                                x,
+                                                optional
+                                            ));
+                                        }
+                                        Noise::Gaussian {
+                                            mu,
+                                            sigma,
+                                            optional,
+                                        } => {
+                                            let gaussian = Gaussian::new(*mu, *sigma)
+                                                .expect("Invalid Gaussian parameters");
+                                            *record_value = json!(add_noise_to_value(
+                                                Gaussian(gaussian),
+                                                x,
+                                                optional
+                                            ));
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-            },
+            }
             Err(_) => {} // If there's an error opening or reading the file, do nothing
         }
     }
