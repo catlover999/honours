@@ -108,34 +108,36 @@ fn apply_noise_to_records(filename: &String, mut records: Value) -> Value {
                     // Iterate through the message object if it's a JSON object
                     if let Value::Object(obj) = &mut records {
                         for (record_key, record_value) in obj.iter_mut() {
-                            // Check if the record_key's value is numeric
-                            if let Some(x) = record_value.as_f64() {
-                                // Check if the record_key has a valid entry in the TOML data
-                                if let Some(setting) = decoded.get(record_key) {
-                                    // Match against the setting type
-                                    match setting {
-                                        Noise::Laplace { mu, b, optional } => {
-                                            let laplace = Laplace::new(*mu, *b)
-                                                .expect("Invalid Laplace parameters");
-                                            *record_value = json!(add_noise_to_value(
-                                                Laplace(laplace),
-                                                x,
-                                                optional
-                                            ));
-                                        }
-                                        Noise::Gaussian {
-                                            mu,
-                                            sigma,
-                                            optional,
-                                        } => {
-                                            let gaussian = Gaussian::new(*mu, *sigma)
-                                                .expect("Invalid Gaussian parameters");
-                                            *record_value = json!(add_noise_to_value(
-                                                Gaussian(gaussian),
-                                                x,
-                                                optional
-                                            ));
-                                        }
+                            // Check if the record_key has a valid entry in the TOML data
+                            if let Some(setting) = decoded.get(record_key) {
+                                // Match against the setting type
+                                match setting {
+                                    Noise::Laplace {
+                                        mu,
+                                        b,
+                                        optional,
+                                    } => {
+                                        let laplace = Laplace::new(*mu, *b)
+                                            .expect("Invalid Laplace parameters");
+                                        *record_value = json!(add_noise_to_value(
+                                            Laplace(laplace),
+                                            record_value.as_f64().expect("Value is non-numeric"),
+                                            optional
+                                        ));
+                                    }
+                                    
+                                    Noise::Gaussian {
+                                        mu,
+                                        sigma,
+                                        optional,
+                                    } => {
+                                        let gaussian = Gaussian::new(*mu, *sigma)
+                                            .expect("Invalid Gaussian parameters");
+                                        *record_value = json!(add_noise_to_value(
+                                            Gaussian(gaussian),
+                                            record_value.as_f64().expect("Value is non-numeric"),
+                                            optional
+                                        ));
                                     }
                                 }
                             }
