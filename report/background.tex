@@ -1,0 +1,60 @@
+\chapter{Background \& Related Work\label{chap:background}}
+
+\section{Differential Privacy}
+
+Differential Privacy is concerned with providing tools to quantitatively measure privacy in a dataset. Noise is added to individual records in a controlled way to not diminish utility beyond desired bounds.\cite{WhatisDifferentialPrivacy} Striking the correct balance between privacy and utility is at the heart of DP research.\cite{Dwork2013} DP can help aid regulatory compliance with privacy regulation. It has proven itself a useful tool and is widely deployed usually using bespoke implementations. It is used to anonymize telemetry data on iOS, Android, Windows, and Chrome.\cite{Maranon,markdefalco_2020} However, most existing implementations don't have a high degree of portability, which this project aims to improve.
+
+\subsection{Global vs Local Differential Privacy}
+
+\section{Fluent Bit}
+Fluent Bit is an industry-standard open source Log and Metric processor capable of taking in events from a large variety of sources, applying filters, buffering, and then sending the processed data to a variety of destinations.\cite{What-is-Fluent-Bit} Written in C, it's YAML-based configuration defines a graph structure for where events should be sourced, what to do with the event, and where the event should be eventually sent. For example: a hub device running Fluent Bit could take in logs from a connected IoT device via MQTT, it then can extract a metric contained in the string, create a histogram based on those stored values, buffer the values to a persistent disk, then send the stored data to a remote server over your desired protocol.
+
+\section{Existing implementations of Differential Privacy}
+
+\subsection{Google's Differential Privacy}
+\subsection{Google's Differential Privacy Library}
+
+The genesis of Google's Differential Privacy Library can be traced back to its earlier privacy project, RAPPOR, which aimed to improve privacy technologies for Chrome in 2014. Google's commitment to differential privacy has evolved significantly since then, leading to the launch of its open-source Differential Privacy library in 2019. This library is written in Go and allows developers to implement differential privacy in their applications, enabling them to gain useful insights from data without compromising individual privacy.\cite{Guevara_2022,RAPPOR}
+
+Google's open-source library provides a comprehensive suite of tools and features to facilitate the implementation of differential privacy. These include statistical functions like counts, sums, averages, medians, and percentiles, rigorous testing frameworks to ensure the accuracy of differential privacy implementations, and modular components for extended functionalities. The library supports a variety of programming languages, including C++, Java, Go, and, more recently, Python, significantly broadening its accessibility and potential impact.\cite{RAPPOR}
+
+The open-source library has been utilized in various Google products to introduce privacy-preserving features. For example, it powers functions in Google Maps that inform users about the busyness of a place or the popularity of a dish without revealing any personal data. Google has integrated this library into it's BigQuery database platform to perform differentially private database querries on large datasets.\cite{Google_BigQuery}
+
+\subsection{Apple's Differential Privacy}
+
+\subsection{Microsoft's Differential Privacy Implementation}
+Microsoft has been a significant contributor to the field of Differential Privacy through both theoretical research and in-production implementations. A significant contribution from Microsoft is the development of the SmartNoise system, as part of their Differential Privacy Toolkit which was developed in collaboration with Harvard's Institute for Quantitative Social Science (IQSS) and School of Engineering and Applied Sciences (SEAS) as part of the OpenDP initiative \cite{MicrosoftOpenDP, MicrosoftHarvardOpenDP}. This platform is designed to enable researchers and data scientists to derive insights from datasets while preserving individual privacy. SmartNoise achieves this by adding statistical noise to the data and managing a privacy-loss budget to ensure that individual contributions are masked without significantly affecting the overall accuracy of the data analysis.
+
+Microsoft's differential privacy framework comprises two main components: statistical noise and a privacy-loss budget. Statistical noise helps mask the contributions of individual data points within a dataset, maintaining the dataset's overall accuracy. The privacy-loss budget tracks the amount of information revealed through various queries, preventing the inadvertent disclosure of private information \cite{MicrosoftDataResponsibly}.
+
+Notable applications of Microsoft's differential privacy technology are Windows telemetry data and LinkedIn advertiser queries. By applying differential privacy, Microsoft aims to understand app usage patterns and provide advertisers with insights with reduced risk of compromising user privacy \cite{MicrosoftDataResponsibly}.
+
+Microsoft's Differential Privacy efforts have limited direct applicability to the Fluent Bit filter plugin as Microsoft is focused on getting differentially private insights out of a private dataset with a trusted curator. Local differential privacy assumes that there is no single dataset containing the true values as the data model has no trusted curator. However, Microsoft's work is applicable in the sense that they have proven OpenDP as a suitable framework that can be deployed into production environments; with them personally aiding development to push the envelope forward when it comes to Differential Privacy research and implementation \cite{MicrosoftSmartNoise}.
+
+
+\subsection{US Census's Differential Privacy}
+
+\subsection{OpenDP}
+OpenDP is a Rust-based Library developed by researchers from Harvard which implements many common DP algorithms. The following quoteblock is extracted from the initial paper proposing the creation of OpenDP \cite{Vadhan2019OpenDPA}
+\begin{displayquote}
+As mentioned above, differential privacy has started to have large-scale deployments in industry and government (Google, Apple, Uber, US Census Bureau) and there is also an extensive body of implementation and experimental work in academiaAs far as we know, all of this work falls short of our goals for this project as they:
+\begin{enumerate}
+    \item are highly tailored to a specific application, with particular data sets and types of analyses to be supported,
+    \item require more expertise in computer science or differential privacy than our anticipated users would have,
+    \item and/or have not been vetted by the differential privacy community at large.
+\end{enumerate}
+In the Privacy Tools Project at Harvard, we have been developing a differential privacy tool, PSI (a Private data Sharing Interface), that aims to address Items 1 \& 2 above [GHK+16]. PSI is being designed to integrate into data repositories like the 40 repositories that use the Dataverse software infrastructure, to allow releasing public statistical summaries and providing interactive queries for exploratory data analysis. PSI is planned for beta deployment along with Dataverse 5, targeted for the end of 2019. However, PSI’s functionality (in terms of the statistical analyses it supports) is still fairly limited, and the underlying library of implemented differentially private algorithms has not been vetted by the research community at large.
+
+We envision OpenDP as a larger open-source project for the differential privacy community to develop general-purpose, usable, and scalable tools for differential privacy (DP) in which users can have confidence. PSI, along with other implementations of differential privacy in academia and industry, can serve as starting points for components of OpenDP, which we envision will continue to grow and evolve through the community that builds around it. A community-driven open-source library that incorporates contributions from many such projects will have greater capabilities, better trust, and broader adoption, which will lead to faster translation of differential privacy to practice. Moreover, even among current existing government and industry deployments, there has been a stated desire to draw from common, trusted, open codebases, rather than reinvent the underlying primitives continually for each new project, and we believe that OpenDP will provide that codebase and receive enthusiastic code contributions from industry partners.
+\end{displayquote}
+
+The reason why OpenDP was chosen as being suitable as it's main aim is to provide
+
+
+\subsection{Problems in Differential Privacy}
+\begin{enumerate}
+    \item 
+\end{enumerate}
+
+\section{Algorithms}
+

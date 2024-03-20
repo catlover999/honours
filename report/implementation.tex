@@ -1,0 +1,9 @@
+\chapter{Introduction\label{chap:introduction}}
+\subsection{Problem Solving}
+\subsubsection{OpenDP intergration issues}
+A number of issues were incounted when trying to integrate OpenDP into the WASM environment. First the documentation is not fully up-to-date as for the past few dozen builds the automatically generated API documentation hosted on docs.rs failed to generate due to document compilation errors. OpenDP cannot run with it's default feature set in WASM it it has an optional dependency on openssl-sys which doesn't support WASM platforms. The good thing is, OpenSSL is only used once in OpenDP's codebase and is wrapped in a feature flag which can be disabled if you disable the default feature set when specifying the OpenDP dependency in your Cargo.toml file. The next issue that was faced was that in the latest version of OpenDP, the 
+\subsection{WASM Filter plugin}
+Fluent Bit has support for Filter and Input plugins in the form of loading a WASM binary and executing a configurable function inside the binary using a fixed ABI. That ABI corresponds to a single event containing a tag (and tag length), time (both seconds and nanoseconds), and a message (and message length). The message in the current stable release (as of v2.2.2) is a JSON-formatted string containing a list of key, value pairs corresponding 
+
+\subsubsection{WASM limitations}
+The choice of going with a WASM filter plugin does pose additional challenges compared to writing a native plugin. The main issue is with variable scope, each time Fluent Bit makes a call to a WASM plugin it needs to reinitialize the plugin before sending the tagged event to the plugin's prescribed ABI. This means that state between WASM function calls is not easy to achieve. 
