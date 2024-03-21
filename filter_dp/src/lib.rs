@@ -12,7 +12,7 @@ use std::{
     os::raw::c_char,
     slice, str,
 };
-use std::{fs::File, io::Read, path::Path};
+use std::{fs::File, io::Read};
 
 //use toml::from_str;
 
@@ -36,7 +36,7 @@ pub extern "C" fn filter_dp(
     .expect("Invalid JSON in record");
 
     // Apply noise to the records
-    let mut noisy_records: Value = apply_noise_to_records(&tag, record);
+    let mut noisy_records: Value = add_noise_to_records(&tag, record);
 
     // Process time value. Not used by filter but is required to be passed back
     let time: String = Utc
@@ -93,59 +93,58 @@ fn add_noise_to_value(distribution: Distribution, value: f64, optional: &Optiona
     // Returns the noisy value
     value + noise
 }
+fn file_to_string(filepath: &String) -> Option<String> {
+    let mut contents = String::new();
+    match File::open(&filepath).and_then(|mut file| file.read_to_string(&mut contents)){
+        Ok(_) => {
+            Some(contents)
+        }
+        Err(_) => {None}
+    }
+}
 
-fn apply_noise_to_records(filename: &String, mut records: Value) -> Value {
-    let filepath: String = format!("{}.toml", filename);
-
-    // Check if there is a configuration file for the given tag
-    if Path::new(&filepath).exists() {
-        let mut contents = String::new();
-        // Attempt to open and read the file into a string
-        match File::open(&filepath).and_then(|mut file| file.read_to_string(&mut contents)) {
-            Ok(_) => {
-                // Attempt to parse the TOML contents into a TomlValue
-                if let Ok(decoded) = toml::from_str::<HashMap<String, Noise>>(&contents) {
-                    // Iterate through the message object if it's a JSON object
-                    if let Value::Object(obj) = &mut records {
-                        for (record_key, record_value) in obj.iter_mut() {
-                            // Check if the record_key has a valid entry in the TOML data
-                            if let Some(setting) = decoded.get(record_key) {
-                                // Match against the setting type
-                                match setting {
-                                    Noise::Laplace {
-                                        mu,
-                                        b,
-                                        optional,
-                                    } => {
-                                        let laplace = Laplace::new(*mu, *b)
-                                            .expect("Invalid Laplace parameters");
-                                        *record_value = json!(add_noise_to_value(
-                                            Laplace(laplace),
-                                            record_value.as_f64().expect("Value is non-numeric"),
-                                            optional
-                                        ));
-                                    }
-                                    
-                                    Noise::Gaussian {
-                                        mu,
-                                        sigma,
-                                        optional,
-                                    } => {
-                                        let gaussian = Gaussian::new(*mu, *sigma)
-                                            .expect("Invalid Gaussian parameters");
-                                        *record_value = json!(add_noise_to_value(
-                                            Gaussian(gaussian),
-                                            record_value.as_f64().expect("Value is non-numeric"),
-                                            optional
-                                        ));
-                                    }
-                                }
-                            }
+fn add_noise_to_records(tag: &String, mut records: Value) -> Value {
+    // Check if there is a settings file for the given tag
+    let settings_file: String = format!("{}.toml", tag);
+    let contents = file_to_string(&settings_file);
+    if let Some(content) = contents {
+        // Attempt to parse the TOML contents into a TomlValue and ensure records is a JSON object
+        if let (Ok(decoded), Value::Object(obj)) = (toml::from_str::<HashMap<String, Noise>>(&content), &mut records) {
+            for (record_key, record_value) in obj.iter_mut() {
+                // Check if the record_key has a valid entry in the TOML data
+                if let Some(setting) = decoded.get(record_key) {
+                    // Match against the setting type
+                    match setting {
+                        Noise::Laplace {
+                            mu,
+                            b,
+                            optional,
+                        } => {
+                            let laplace = Laplace::new(*mu, *b)
+                                .expect("Invalid Laplace parameters");
+                            *record_value = json!(add_noise_to_value(
+                                Laplace(laplace),
+                                record_value.as_f64().expect("Value is non-numeric"),
+                                optional
+                            ));
+                        }
+                        
+                        Noise::Gaussian {
+                            mu,
+                            sigma,
+                            optional,
+                        } => {
+                            let gaussian = Gaussian::new(*mu, *sigma)
+                                .expect("Invalid Gaussian parameters");
+                            *record_value = json!(add_noise_to_value(
+                                Gaussian(gaussian),
+                                record_value.as_f64().expect("Value is non-numeric"),
+                                optional
+                            ));
                         }
                     }
                 }
             }
-            Err(_) => {} // If there's an error opening or reading the file, do nothing
         }
     }
     records
