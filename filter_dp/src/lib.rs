@@ -63,18 +63,25 @@ struct OptionalSettings {
 #[serde(tag = "type")]
 enum Noise {
     Laplace {
+        #[serde(default = "default_mu")]
         mu: f64,
-        b: f64,
+        sensitivity: f64,
+        epsilon: f64,
         #[serde(flatten)]
         optional: OptionalSettings,
     },
     Gaussian {
+        #[serde(default = "default_mu")]
         mu: f64,
-        sigma: f64,
+        sensitivity: f64,
+        epsilon: f64,
+        delta: f64,
         #[serde(flatten)]
         optional: OptionalSettings,
     },
 }
+
+fn default_mu() -> f64 {0.0}
 
 fn add_noise_to_value(distribution: Distribution, value: f64, optional: &OptionalSettings) -> f64 {
     // We need noise to choose a value on the distribution. This can optionally be seeded
@@ -117,10 +124,12 @@ fn add_noise_to_records(tag: &String, mut records: Value) -> Value {
                     match setting {
                         Noise::Laplace {
                             mu,
-                            b,
+                            sensitivity,
+                            epsilon,
                             optional,
                         } => {
-                            let laplace = Laplace::new(*mu, *b)
+                            let b = sensitivity / epsilon;
+                            let laplace = Laplace::new(*mu, b)
                                 .expect("Invalid Laplace parameters");
                             *record_value = json!(add_noise_to_value(
                                 Laplace(laplace),
@@ -131,10 +140,13 @@ fn add_noise_to_records(tag: &String, mut records: Value) -> Value {
                         
                         Noise::Gaussian {
                             mu,
-                            sigma,
+                            sensitivity,
+                            epsilon,
+                            delta,
                             optional,
                         } => {
-                            let gaussian = Gaussian::new(*mu, *sigma)
+                            let sigma = (2.0 * (1.25 / delta).ln() * sensitivity.powi(2)) / epsilon.powi(2).sqrt();
+                            let gaussian = Gaussian::new(*mu, sigma)
                                 .expect("Invalid Gaussian parameters");
                             *record_value = json!(add_noise_to_value(
                                 Gaussian(gaussian),
