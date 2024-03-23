@@ -5,14 +5,14 @@ use rv::{
     prelude::Rv,
 };
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{json, Number, Value};
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
     os::raw::c_char,
     slice, str,
+    fs,
 };
-use std::{fs::File, io::Read};
 
 //use toml::from_str;
 
@@ -36,7 +36,7 @@ pub extern "C" fn filter_dp(
     .expect("Invalid JSON in record");
 
     // Apply noise to the records
-    let mut noisy_records: Value = add_noise_to_records(&tag, record);
+    let mut noisy_records: Value = add_noise_to_records(&tag, record).expect("msg");
 
     // Process time value. Not used by filter but is required to be passed back
     let time: String = Utc
@@ -55,8 +55,20 @@ pub extern "C" fn filter_dp(
 }
 
 #[derive(Deserialize)]
+#[allow(non_camel_case_types)]
+enum Units {
+    int,
+    float,
+}
+impl Units {
+    fn default_unit() -> Self {Units::float}
+}
+
+#[derive(Deserialize)]
 struct OptionalSettings {
     rng_seed: Option<String>,
+    #[serde(default = "Units::default_unit")]
+    unit: Units,
 }
 
 #[derive(Deserialize)]
@@ -83,7 +95,7 @@ enum Noise {
 
 fn default_mu() -> f64 {0.0}
 
-fn add_noise_to_value(distribution: Distribution, value: f64, optional: &OptionalSettings) -> f64 {
+fn add_noise_to_value(distribution: Distribution, value: Number, optional: &OptionalSettings) -> Result<Number, String> {
     // We need noise to choose a value on the distribution. This can optionally be seeded
     let mut rng: Box<dyn RngCore> = match &optional.rng_seed {
         Some(seed) => {
@@ -97,67 +109,72 @@ fn add_noise_to_value(distribution: Distribution, value: f64, optional: &Optiona
 
     // Creates the noise from the distribution
     let noise: f64 = distribution.draw(&mut rng).into();
-    // Returns the noisy value
-    value + noise
+    match &optional.unit {
+        Units::int => {Ok(Number::from(value.as_i64().unwrap() + (noise as i64)))},
+        Units::float => {Ok(Number::from_f64(value.as_f64().unwrap() + (noise.round() as f64)).unwrap())}
+    }    
 }
-fn file_to_string(filepath: &String) -> Option<String> {
-    let mut contents = String::new();
-    match File::open(&filepath).and_then(|mut file| file.read_to_string(&mut contents)){
-        Ok(_) => {
-            Some(contents)
-        }
-        Err(_) => {None}
-    }
+fn load_configuration(tag: &str) -> Result<HashMap<String, Noise>, String> {
+    let settings_file = format!("{}.toml", tag);
+    let contents = fs::read_to_string(&settings_file)
+        .map_err(|e| format!("Failed to read settings file: {}", e))?;
+    toml::from_str::<HashMap<String, Noise>>(&contents)
+        .map_err(|e| format!("Failed to parse settings: {}", e))
 }
 
-fn add_noise_to_records(tag: &String, mut records: Value) -> Value {
+fn add_noise_to_records(tag: &String, mut records: Value) -> Result<Value, String> {
     // Check if there is a settings file for the given tag
-    let settings_file: String = format!("{}.toml", tag);
-    let contents = file_to_string(&settings_file);
-    if let Some(content) = contents {
-        // Attempt to parse the TOML contents into a TomlValue and ensure records is a JSON object
-        if let (Ok(decoded), Value::Object(obj)) = (toml::from_str::<HashMap<String, Noise>>(&content), &mut records) {
-            for (record_key, record_value) in obj.iter_mut() {
-                // Check if the record_key has a valid entry in the TOML data
-                if let Some(setting) = decoded.get(record_key) {
-                    // Match against the setting type
-                    match setting {
-                        Noise::Laplace {
-                            mu,
-                            sensitivity,
-                            epsilon,
-                            optional,
-                        } => {
-                            let b = sensitivity / epsilon;
-                            let laplace = Laplace::new(*mu, b)
-                                .expect("Invalid Laplace parameters");
-                            *record_value = json!(add_noise_to_value(
-                                Laplace(laplace),
-                                record_value.as_f64().expect("Value is non-numeric"),
-                                optional
-                            ));
+    let config = load_configuration(tag)?;
+    if let Value::Object(ref mut map) = records {
+        for (record_key, record_value) in map.iter_mut() {
+            // Match against the setting type
+            if let Some(setting) = config.get(record_key) {
+                match setting {
+                    Noise::Laplace {
+                        mu,
+                        sensitivity,
+                        epsilon,
+                        optional,
+                    } => {
+                        let b = sensitivity / epsilon;
+                        let laplace = Laplace::new(*mu, b);
+                        match laplace {
+                            Ok(dist) => {
+                                *record_value = json!(add_noise_to_value(
+                                    Laplace(dist),
+                                    record_value.as_number().unwrap().clone(),
+                                    optional
+                                ));
+                            }
+                            Err(e) => {return Err(e.to_string());}
                         }
                         
-                        Noise::Gaussian {
-                            mu,
-                            sensitivity,
-                            epsilon,
-                            delta,
-                            optional,
-                        } => {
-                            let sigma = (2.0 * (1.25 / delta).ln() * sensitivity.powi(2)) / epsilon.powi(2).sqrt();
-                            let gaussian = Gaussian::new(*mu, sigma)
-                                .expect("Invalid Gaussian parameters");
-                            *record_value = json!(add_noise_to_value(
-                                Gaussian(gaussian),
-                                record_value.as_f64().expect("Value is non-numeric"),
-                                optional
-                            ));
-                        }
                     }
+                    
+                    Noise::Gaussian {
+                        mu,
+                        sensitivity,
+                        epsilon,
+                        delta,
+                        optional,
+                    } => {
+                        let sigma = ((2.0 * (1.25 / delta).ln() * sensitivity.powi(2)) / epsilon.powi(2)).sqrt();
+                        let gaussian = Gaussian::new(*mu, sigma);
+                        match gaussian {
+                            Ok(dist) => {
+                                *record_value = json!(add_noise_to_value(
+                                    Gaussian(dist),
+                                    record_value.as_number().unwrap().clone(),
+                                    optional
+                                ));
+                            }
+                            Err(e) => {return Err(e.to_string());}
+                    }
+                }
                 }
             }
         }
     }
-    records
+        
+    Ok(records)
 }
