@@ -122,59 +122,67 @@ fn load_configuration(tag: &str) -> Result<HashMap<String, Noise>, String> {
         .map_err(|e| format!("Failed to parse settings: {}", e))
 }
 
+fn check_settings_for_record(record_key: &String, record_value: &mut Value, config: &HashMap<String, Noise>) -> Result<String, String> {
+    if let Some(setting) = config.get(record_key) {
+        match setting {
+            Noise::Laplace {
+                mu,
+                sensitivity,
+                epsilon,
+                optional,
+            } => {
+                let b = sensitivity / epsilon;
+                let laplace = Laplace::new(*mu, b);
+                match laplace {
+                    Ok(dist) => {
+                        *record_value = json!(add_noise_to_value(
+                            Laplace(dist),
+                            record_value.as_number().expect("N").clone(),
+                            optional
+                        ));
+                    }
+                    Err(e) => {return Err(e.to_string());}
+                }
+                
+            }
+            
+            Noise::Gaussian {
+                mu,
+                sensitivity,
+                epsilon,
+                delta,
+                optional,
+            } => {
+                let sigma = ((2.0 * (1.25 / delta).ln() * sensitivity.powi(2)) / epsilon.powi(2)).sqrt();
+                let gaussian = Gaussian::new(*mu, sigma);
+                match gaussian {
+                    Ok(dist) => {
+                        *record_value = json!(add_noise_to_value(
+                            Gaussian(dist),
+                            record_value.as_number().unwrap().clone(),
+                            optional
+                        ));
+                    }
+                    Err(e) => {return Err(e.to_string());}
+            }
+        }
+        }
+    }
+    Ok("Test".to_string())
+}
+
 fn add_noise_to_records(tag: &String, mut records: Value) -> Result<Value, String> {
     // Check if there is a settings file for the given tag
-    let config = load_configuration(tag)?;
+    let config: HashMap<String, Noise> = load_configuration(tag)?;
     if let Value::Object(ref mut map) = records {
         for (record_key, record_value) in map.iter_mut() {
             // Match against the setting type
-            if let Some(setting) = config.get(record_key) {
-                match setting {
-                    Noise::Laplace {
-                        mu,
-                        sensitivity,
-                        epsilon,
-                        optional,
-                    } => {
-                        let b = sensitivity / epsilon;
-                        let laplace = Laplace::new(*mu, b);
-                        match laplace {
-                            Ok(dist) => {
-                                *record_value = json!(add_noise_to_value(
-                                    Laplace(dist),
-                                    record_value.as_number().unwrap().clone(),
-                                    optional
-                                ));
-                            }
-                            Err(e) => {return Err(e.to_string());}
-                        }
-                        
-                    }
-                    
-                    Noise::Gaussian {
-                        mu,
-                        sensitivity,
-                        epsilon,
-                        delta,
-                        optional,
-                    } => {
-                        let sigma = ((2.0 * (1.25 / delta).ln() * sensitivity.powi(2)) / epsilon.powi(2)).sqrt();
-                        let gaussian = Gaussian::new(*mu, sigma);
-                        match gaussian {
-                            Ok(dist) => {
-                                *record_value = json!(add_noise_to_value(
-                                    Gaussian(dist),
-                                    record_value.as_number().unwrap().clone(),
-                                    optional
-                                ));
-                            }
-                            Err(e) => {return Err(e.to_string());}
-                    }
-                }
-                }
+            let t = check_settings_for_record(record_key, record_value, &config);
+            match t {
+                Ok(_) => {}
+                Err(e) => {return Err(e)}
             }
         }
-    }
-        
+    }   
     Ok(records)
 }
