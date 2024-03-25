@@ -27,95 +27,35 @@ pub extern "C" fn filter_dp(
         str::from_utf8(unsafe { slice::from_raw_parts(tag as *const u8, tag_len as usize) })
             .expect("Invalid UTF-8 in tag")
             .to_string();
-    let record: Value = serde_json::from_slice(unsafe {
-        slice::from_raw_parts(record as *const u8, record_len as usize)
-    })
-    .expect("Invalid JSON in record");
+    let record: Value =
+        serde_json::from_slice( unsafe { slice::from_raw_parts(record as *const u8, record_len as usize) })
+            .expect("Invalid JSON in record");
+
     // Apply noise to the records
-    let mut noisy_records = add_noise_to_records(&tag, record);
-
-    // Process time value. Not used by filter but is required to be passed back
-    //let time: String = Utc
-    //    .timestamp_opt(time_sec as i64, time_nsec)
-    //    .single()
-    //    .expect("Invalid timestamp")
-    //    .format("%Y-%m-%dT%H:%M:%S.%9f %z")
-    //    .to_string();
-
-    //add_record(&mut noisy_records, "time".to_string(), time);
-    //add_record(&mut noisy_records, "tag".to_string(), tag);
+    let noisy_records: Value = add_noise_to_records(&tag, record);
 
     noisy_records.to_string().as_ptr()
 }
 
-#[derive(Deserialize)]
-#[allow(non_camel_case_types)]
-enum Units {
-    int,
-    float,
-}
-impl Units {
-    fn default_unit() -> Self {
-        Units::float
-    }
-}
-
-#[derive(Deserialize)]
-struct OptionalSettings {
-    rng_seed: Option<String>,
-    #[serde(default = "Units::default_unit")]
-    unit: Units,
-}
-
-#[derive(Deserialize)]
-#[serde(tag = "type")]
-enum Noise {
-    Laplace {
-        #[serde(default = "default_mu")]
-        mu: f64,
-        sensitivity: f64,
-        epsilon: f64,
-        #[serde(flatten)]
-        optional: OptionalSettings,
-    },
-    Gaussian {
-        #[serde(default = "default_mu")]
-        mu: f64,
-        sensitivity: f64,
-        epsilon: f64,
-        delta: f64,
-        #[serde(flatten)]
-        optional: OptionalSettings,
-    },
-}
-
-fn default_mu() -> f64 {
-    0.0
-}
-
-fn add_noise_to_value(
-    distribution: Distribution,
-    value: Number,
-    optional: &OptionalSettings,
-) -> Result<Number, String> {
-    // We need noise to choose a value on the distribution. This can optionally be seeded
-    let mut rng: Box<dyn RngCore> = match &optional.rng_seed {
-        Some(seed) => {
-            let mut hasher = DefaultHasher::new();
-            seed.hash(&mut hasher);
-            let seed_hash = hasher.finish();
-            Box::new(StdRng::seed_from_u64(seed_hash))
+fn add_noise_to_records(tag: &String, mut records: Value) -> Value {
+    // Check if there is a settings file for the given tag
+    match load_configuration(tag) {
+        Ok(config) => {
+            if let Value::Object(ref mut map) = records {
+                for (record_key, record_value) in map.iter_mut() {
+                    // Match against the setting type
+                    match check_settings_for_record(record_key, record_value, &config) {
+                        Err(error) => {eprintln!("{}", error)},
+                        Ok(()) => {}
+                    }
+                }
+            }
         }
-        None => Box::new(thread_rng()),
-    };
-
-    // Creates the noise from the distribution
-    let noise: f64 = distribution.draw(&mut rng).into();
-    match &optional.unit {
-        Units::int => Ok(Number::from(value.as_i64().unwrap() + (noise as i64))),
-        Units::float => {Ok(Number::from_f64(value.as_f64().unwrap() + (noise.round() as f64)).unwrap())}
-    }
+        Err(error) => {eprintln!("{}", error)},
+    }  
+    records
 }
+
 fn load_configuration(tag: &str) -> Result<HashMap<String, Noise>, String> {
     let settings_file = format!("{}.toml", tag);
     let contents = fs::read_to_string(&settings_file)
@@ -165,39 +105,71 @@ fn check_settings_for_record(
     Ok(())
 }
 
-fn add_noise_to_records(tag: &String, mut records: Value) -> Value {
-    // Check if there is a settings file for the given tag
-    let mut errors: Vec<String> = Vec::new();
-    match load_configuration(tag) {
-        Ok(config) => {
-            if let Value::Object(ref mut map) = records {
-                for (record_key, record_value) in map.iter_mut() {
-                    // Match against the setting type
-                    match check_settings_for_record(record_key, record_value, &config) {
-                        Err(error) => {errors.push(error);},
-                        Ok(()) => {}
-                    }
-                }
-            }
+fn add_noise_to_value(
+    distribution: Distribution,
+    value: Number,
+    optional: &OptionalSettings,
+) -> Result<Number, String> {
+    // We need noise to choose a value on the distribution. This can optionally be seeded
+    let mut rng: Box<dyn RngCore> = match &optional.rng_seed {
+        Some(seed) => {
+            let mut hasher = DefaultHasher::new();
+            seed.hash(&mut hasher);
+            let seed_hash = hasher.finish();
+            Box::new(StdRng::seed_from_u64(seed_hash))
         }
-        Err(error) => {errors.push(error);},
-    }  
-    record_error(&mut records, errors);
-    records
+        None => Box::new(thread_rng()),
+    };
+
+    // Creates the noise from the distribution
+    let noise: f64 = distribution.draw(&mut rng).into();
+    match &optional.unit {
+        Units::int => Ok(Number::from(value.as_i64().unwrap() + (noise as i64))),
+        Units::float => {Ok(Number::from_f64(value.as_f64().unwrap() + (noise.round() as f64)).unwrap())}
+    }
 }
 
 
-fn record_error(records: &mut Value, errors: Vec<String>) {
-    for error in errors {
-        match records["errors"] {
-            Value::Array(ref mut errors) => {
-                // If "errors" is an array, push the new error message.
-                errors.push(Value::String(error));
-            },
-            _ => {
-                // If "errors" does not exist or is not an array, create a new array with the error.
-                records["errors"] = Value::Array(vec![Value::String(error)]);
-            }
-        }
+
+// Define deserialization types for Toml settings files (and where applicable, defaults)
+#[derive(Deserialize)]
+#[serde(tag = "type")]
+enum Noise {
+    Laplace {
+        #[serde(default = "default_mu")]
+        mu: f64,
+        sensitivity: f64,
+        epsilon: f64,
+        #[serde(flatten)]
+        optional: OptionalSettings,
+    },
+    Gaussian {
+        #[serde(default = "default_mu")]
+        mu: f64,
+        sensitivity: f64,
+        epsilon: f64,
+        delta: f64,
+        #[serde(flatten)]
+        optional: OptionalSettings,
+    },
+}
+fn default_mu() -> f64 {
+    0.0
+}
+#[derive(Deserialize)]
+struct OptionalSettings {
+    rng_seed: Option<String>,
+    #[serde(default = "Units::default_unit")]
+    unit: Units,
+}
+#[derive(Deserialize)]
+#[allow(non_camel_case_types)]
+enum Units {
+    int,
+    float,
+}
+impl Units {
+    fn default_unit() -> Self {
+        Units::float
     }
 }
