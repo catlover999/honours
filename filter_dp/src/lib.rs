@@ -27,9 +27,10 @@ pub extern "C" fn filter_dp(
         str::from_utf8(unsafe { slice::from_raw_parts(tag as *const u8, tag_len as usize) })
             .expect("Invalid UTF-8 in tag")
             .to_string();
-    let record: Value =
-        serde_json::from_slice( unsafe { slice::from_raw_parts(record as *const u8, record_len as usize) })
-            .expect("Invalid JSON in record");
+    let record: Value = serde_json::from_slice(unsafe {
+        slice::from_raw_parts(record as *const u8, record_len as usize)
+    })
+    .expect("Invalid JSON in record");
 
     // Apply noise to the records
     let noisy_records: Value = add_noise_to_records(&tag, record);
@@ -45,14 +46,18 @@ fn add_noise_to_records(tag: &String, mut records: Value) -> Value {
                 for (record_key, record_value) in map.iter_mut() {
                     // Match against the setting type
                     match check_settings_for_record(record_key, record_value, &config) {
-                        Err(error) => {eprintln!("{}", error)},
+                        Err(error) => {
+                            eprintln!("{}", error)
+                        }
                         Ok(()) => {}
                     }
                 }
             }
         }
-        Err(error) => {eprintln!("{}", error)},
-    }  
+        Err(error) => {
+            eprintln!("{}", error)
+        }
+    }
     records
 }
 
@@ -84,7 +89,7 @@ fn check_settings_for_record(
                     record_value.as_number().ok_or("Value not numeric")?.clone(),
                     optional
                 ));
-            },
+            }
             Noise::Gaussian {
                 mu,
                 sensitivity,
@@ -92,14 +97,15 @@ fn check_settings_for_record(
                 delta,
                 optional,
             } => {
-                let sigma = ((2.0 * (1.25 / delta).ln() * sensitivity.powi(2)) / epsilon.powi(2)).sqrt();
+                let sigma =
+                    ((2.0 * (1.25 / delta).ln() * sensitivity.powi(2)) / epsilon.powi(2)).sqrt();
                 let gaussian = Gaussian::new(*mu, sigma).map_err(|e| e.to_string())?;
                 *record_value = json!(add_noise_to_value(
                     Gaussian(gaussian),
                     record_value.as_number().ok_or("Value not numeric")?.clone(),
                     optional
                 ));
-            },
+            }
         }
     }
     Ok(())
@@ -125,11 +131,11 @@ fn add_noise_to_value(
     let noise: f64 = distribution.draw(&mut rng).into();
     match &optional.unit {
         Units::int => Ok(Number::from(value.as_i64().unwrap() + (noise as i64))),
-        Units::float => {Ok(Number::from_f64(value.as_f64().unwrap() + (noise.round() as f64)).unwrap())}
+        Units::float => {
+            Ok(Number::from_f64(value.as_f64().unwrap() + (noise.round() as f64)).unwrap())
+        }
     }
 }
-
-
 
 // Define deserialization types for Toml settings files (and where applicable, defaults)
 #[derive(Deserialize)]
