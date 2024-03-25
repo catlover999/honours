@@ -50,6 +50,7 @@ COPY --from=builder /filter_dp/target/wasm32-wasi/release/filter_dp.wasm .
 RUN bin/flb-wamrc -o filter_dp.aot filter_dp.wasm
 COPY fluent-bit.conf .
 COPY input input
+COPY my_cpu.toml .
 RUN mkdir output
 RUN bin/fluent-bit -c fluent-bit.conf
 
