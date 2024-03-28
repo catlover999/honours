@@ -1,14 +1,19 @@
-
+# Build arguments
 ARG wasm_optimization=aot
+ARG rust_profile=release
 
 # 1. Build stages for filter_dp
 FROM docker.io/rust:latest AS builder 
 RUN rustup target add wasm32-wasi
 WORKDIR /filter_dp
-
-COPY filter_dp/Cargo.toml filter_dp/Cargo.lock ./
+COPY filter_dp/Cargo.toml .
 COPY filter_dp/src src
-RUN cargo build --release --target wasm32-wasi
+ARG rust_profile
+RUN if [ "${rust_profile}" != "debug" ]; then \
+      cargo build --${rust_profile} --target wasm32-wasi; \
+    else \
+      cargo build --target wasm32-wasi; \
+    fi
 
 # 2. Fluent Bit Stage
 FROM debian:bookworm-slim as fluent
@@ -47,16 +52,16 @@ RUN cmake -DFLB_WAMRC=On .. && \
     install bin/fluent-bit /fluent-bit/bin/ && \
     install bin/flb-wamrc /fluent-bit/bin/
 COPY fluent-bit/conf/*.conf /fluent-bit/etc/
-
+RUN du -sh /src
 
 FROM fluent as fluent-wasm
 WORKDIR /fluent-bit
-COPY --from=builder /filter_dp/target/wasm32-wasi/release/filter_dp.wasm .
+ARG rust_profile
+COPY --from=builder /filter_dp/target/wasm32-wasi/$rust_profile/filter_dp.wasm .
 
 FROM fluent-wasm as fluent-aot
 RUN bin/flb-wamrc -o filter_dp.aot filter_dp.wasm
 
-ARG wasm_optimization
 FROM fluent-${wasm_optimization} as fluent-runner
 COPY input input
 COPY my_cpu.toml .
