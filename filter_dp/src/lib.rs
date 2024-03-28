@@ -9,26 +9,26 @@ use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     fs,
     hash::{Hash, Hasher},
-    os::raw::c_char,
-    slice, str,
+    slice,
+    str,
 };
 
 #[no_mangle]
 pub extern "C" fn filter_dp(
-    tag: *const c_char,
+    tag: *const u8,
     tag_len: u32,
     _time_sec: u32,
     _time_nsec: u32,
-    record: *const c_char,
+    record: *const u8,
     record_len: u32,
 ) -> *const u8 {
     // Process tag and record
     let tag: String =
-        str::from_utf8(unsafe { slice::from_raw_parts(tag as *const u8, tag_len as usize) })
+        str::from_utf8(unsafe { slice::from_raw_parts(tag, tag_len as usize) })
             .expect("Invalid UTF-8 in tag")
             .to_string();
     let record: Value = serde_json::from_slice(unsafe {
-        slice::from_raw_parts(record as *const u8, record_len as usize)
+        slice::from_raw_parts(record, record_len as usize)
     })
     .expect("Invalid JSON in record");
 
@@ -42,6 +42,7 @@ fn add_noise_to_records(tag: &String, mut records: Value) -> Value {
     // Check if there is a settings file for the given tag
     match load_configuration(tag) {
         Ok(config) => {
+            println!("Loaded config");
             if let Value::Object(ref mut map) = records {
                 for (record_key, record_value) in map.iter_mut() {
                     // Match against the setting type
@@ -74,6 +75,7 @@ fn check_settings_for_record(
     record_value: &mut Value,
     config: &HashMap<String, Noise>,
 ) -> Result<(), String> {
+    println!("{}:{}", record_key, record_value);
     if let Some(setting) = config.get(record_key) {
         match setting {
             Noise::Laplace {
@@ -82,13 +84,14 @@ fn check_settings_for_record(
                 epsilon,
                 optional,
             } => {
+                println!("Matched laplace! {},{},{}", mu, sensitivity, epsilon);
                 let b = sensitivity / epsilon;
                 let laplace = Laplace::new(*mu, b).map_err(|e| e.to_string())?;
                 *record_value = json!(add_noise_to_value(
                     Laplace(laplace),
                     record_value.as_number().ok_or("Value not numeric")?.clone(),
                     optional
-                ));
+                )?);
             }
             Noise::Gaussian {
                 mu,
@@ -104,7 +107,7 @@ fn check_settings_for_record(
                     Gaussian(gaussian),
                     record_value.as_number().ok_or("Value not numeric")?.clone(),
                     optional
-                ));
+                )?);
             }
         }
     }
@@ -129,10 +132,12 @@ fn add_noise_to_value(
 
     // Creates the noise from the distribution
     let noise: f64 = distribution.draw(&mut rng).into();
+    println!("Noise:{}, value{}", noise, value);
+    // Adds the noise to the value using the spesified unit, returns as a serde_json Number
     match &optional.unit {
         Units::int => Ok(Number::from(value.as_i64().unwrap() + (noise as i64))),
         Units::float => {
-            Ok(Number::from_f64(value.as_f64().unwrap() + (noise.round() as f64)).unwrap())
+            Ok(Number::from_f64(value.as_f64().unwrap() + (noise as f64)).unwrap())
         }
     }
 }

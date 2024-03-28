@@ -1,3 +1,6 @@
+
+ARG wasm_optimization=aot
+
 # 1. Build stages for filter_dp
 FROM docker.io/rust:latest AS builder 
 RUN rustup target add wasm32-wasi
@@ -8,7 +11,7 @@ COPY filter_dp/src src
 RUN cargo build --release --target wasm32-wasi
 
 # 2. Fluent Bit Stage
-FROM debian:bookworm-slim as fluent-builder
+FROM debian:bookworm-slim as fluent
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -45,14 +48,21 @@ RUN cmake -DFLB_WAMRC=On .. && \
     install bin/flb-wamrc /fluent-bit/bin/
 COPY fluent-bit/conf/*.conf /fluent-bit/etc/
 
-FROM fluent-builder as fluent-runner
+
+FROM fluent as fluent-wasm
+WORKDIR /fluent-bit
 COPY --from=builder /filter_dp/target/wasm32-wasi/release/filter_dp.wasm .
+
+FROM fluent-wasm as fluent-aot
 RUN bin/flb-wamrc -o filter_dp.aot filter_dp.wasm
-COPY fluent-bit.conf .
+
+ARG wasm_optimization
+FROM fluent-${wasm_optimization} as fluent-runner
 COPY input input
 COPY my_cpu.toml .
 RUN mkdir output
-RUN bin/fluent-bit -c fluent-bit.conf
+ARG wasm_optimization
+RUN bin/fluent-bit -i cpu -t my_cpu -F wasm -m '*' -p "WASM_Path=filter_dp.$wasm_optimization" -p "Function_Name=filter_dp" -p "accessible_paths=." -o stdout -m '*'
 
 # 3. Evaualtion stage
 FROM docker.io/jupyter/minimal-notebook:latest as notebook
