@@ -20,48 +20,42 @@ pub extern "C" fn filter_dp(
     tag_len: u32,
     _time_sec: u32,
     _time_nsec: u32,
-    record: *const u8,
+    records: *const u8,
     record_len: u32,
 ) -> *const u8 {
-    // Process tag and record using anyhow for error handling
-    let tag_result = unsafe { slice::from_raw_parts(tag, tag_len as usize) };
-    let tag = str::from_utf8(tag_result)
+    // Process event's tag and records into Rust types
+    let tag = str::from_utf8(unsafe { slice::from_raw_parts(tag, tag_len as usize) })
         .map_err(|e| anyhow!(e))
-        .expect("Invalid UTF-8 in tag");
+        .unwrap();
 
-    let record_result = unsafe { slice::from_raw_parts(record, record_len as usize) };
-    let record = serde_json::from_slice(record_result)
+    let json_records = serde_json::from_slice(unsafe { slice::from_raw_parts(records, record_len as usize) })
         .map_err(|e| anyhow!(e))
-        .expect("Invalid JSON in record");
+        .unwrap();
 
     // Apply noise to the records
-    let noisy_records: Value = add_noise_to_records(tag, record);
-    
-    // Leak the CString into raw pointer to avoid it being deallocated
-    let c_str = CString::new(noisy_records.to_string()).expect("CString::new failed");
-    let ptr = c_str.into_raw();
-    ptr as *const u8
+    let noisy_records = add_noise_to_records(tag, json_records)
+        .map_err(|e| anyhow!(e))
+        .unwrap();
+
+    // Leak the CString into a raw pointer to avoid it being deallocated
+    CString::new(noisy_records.to_string())
+        .expect("CString::new failed")
+        .into_raw() as *const u8
 }
 
-fn add_noise_to_records(tag: &str, mut records: Value) -> Value {
+fn add_noise_to_records(tag: &str, mut records: Value) -> Result<Value> {
     // Check if there is a settings file for the given tag
-    match load_configuration(tag) {
-        Ok(config) => {
-            #[cfg(debug_assertions)]
-            println!("Loaded config");
-            if let Value::Object(ref mut map) = records {
-                for (record_key, record_value) in map.iter_mut() {
-                    if let Err(error) = check_settings_for_record(record_key, record_value, &config){
-                        eprintln!("Error: {:?}", error);
-                    }
-                }
+    if let Ok(config) = load_configuration(tag) {
+        #[cfg(debug_assertions)]
+        println!("Loaded config: {}", tag);
+        if let Value::Object(ref mut map) = records {
+            for (record_key, record_value) in map.iter_mut() {
+                process_setting_for_record(record_key, record_value, &config)
+                    .map_err(|e| anyhow!(e))?;
             }
         }
-        Err(error) => {
-            eprintln!("Error loading configuration: {:?}", error);
-        }
     }
-    records
+    Ok(records)
 }
 
 fn load_configuration(tag: &str) -> Result<HashMap<String, Noise>> {
@@ -72,13 +66,14 @@ fn load_configuration(tag: &str) -> Result<HashMap<String, Noise>> {
         .map_err(|e| anyhow!("Failed to parse settings: {}", e))
 }
 
-fn check_settings_for_record(
+fn process_setting_for_record(
     record_key: &str,
     record_value: &mut Value,
     config: &HashMap<String, Noise>,
 ) -> Result<()> {
     #[cfg(debug_assertions)]
-    println!("{}:{}", record_key, record_value);
+    println!("key: {}, value: {}", record_key, record_value);
+
     if let Some(setting) = config.get(record_key) {
         match setting {
             Noise::Laplace {
@@ -92,11 +87,11 @@ fn check_settings_for_record(
                 *record_value = json!(add_noise_to_value(
                     Laplace(laplace),
                     record_value
-                        .as_number()
-                        .ok_or_else(|| anyhow!("Value not numeric"))?
-                        .clone(),
+                        .as_f64()
+                        .ok_or_else(|| anyhow!("Value not numeric"))?,
                     optional
-                )?);
+                )
+                .map_err(|e| anyhow!(e))?);
             }
             Noise::Gaussian {
                 mu,
@@ -110,11 +105,11 @@ fn check_settings_for_record(
                 *record_value = json!(add_noise_to_value(
                     Gaussian(gaussian),
                     record_value
-                        .as_number()
-                        .ok_or_else(|| anyhow!("Value not numeric"))?
-                        .clone(),
+                        .as_f64()
+                        .ok_or_else(|| anyhow!("Value not numeric"))?,
                     optional
-                )?);
+                )
+                .map_err(|e| anyhow!(e))?);
             }
         }
     }
@@ -123,7 +118,7 @@ fn check_settings_for_record(
 
 fn add_noise_to_value(
     distribution: Distribution,
-    value: Number,
+    value: f64,
     optional: &OptionalSettings,
 ) -> Result<Number> {
     // We need noise to choose a value on the distribution. This can optionally be seeded
@@ -139,14 +134,14 @@ fn add_noise_to_value(
 
     // Creates the noise from the distribution
     let noise: f64 = distribution.draw(&mut rng).into();
-    
+
     #[cfg(debug_assertions)]
     println!("Noise: {}", noise);
 
     // Adds the noise to the value using the specified unit, returns as a serde_json Number
     match optional.unit {
-        Units::int => Ok(Number::from(value.as_f64().unwrap() as i64 + noise as i64)),
-        Units::float => Ok(Number::from_f64(value.as_f64().unwrap() + noise)
+        Units::int => Ok(Number::from((value + noise) as i64)),
+        Units::float => Ok(Number::from_f64(value + noise)
             .ok_or_else(|| anyhow!("Failed to create float number"))?),
     }
 }
@@ -173,21 +168,25 @@ enum Noise {
         optional: OptionalSettings,
     },
 }
+
 fn default_mu() -> f64 {
     0.0
 }
+
 #[derive(Deserialize)]
 struct OptionalSettings {
     rng_seed: Option<String>,
     #[serde(default = "Units::default_unit")]
     unit: Units,
 }
+
 #[derive(Deserialize)]
 #[allow(non_camel_case_types)]
 enum Units {
     int,
     float,
 }
+
 impl Units {
     fn default_unit() -> Self {
         Units::float
