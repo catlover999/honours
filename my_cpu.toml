@@ -1,4 +1,0 @@
-[system_p]
-type = "Laplace"
-epsilon = 1
-sensitivity = 1

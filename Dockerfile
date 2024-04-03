@@ -64,15 +64,25 @@ RUN bin/flb-wamrc -o filter_dp.aot filter_dp.wasm
 
 FROM fluent-${wasm_optimization} as fluent-runner
 COPY input input
-COPY my_cpu.toml .
+COPY filters filters
 RUN mkdir output
 ARG wasm_optimization
-RUN bin/fluent-bit -i cpu -t my_cpu -F wasm -m '*' -p "WASM_Path=filter_dp.$wasm_optimization" -p "Function_Name=filter_dp" -p "accessible_paths=." -o stdout -m '*'
+COPY fluent-bit-wrapper.sh .
+RUN bash fluent-bit-wrapper.sh
+# RUN bin/fluent-bit -v --dry-run \
+#     -i dummy -t test1 \
+#         -p "Dummy = {\"Example1\": 3, \"Example2\": 4, \"Example3\": 5}" \
+#         -p "Samples = 3" \
+#     -F wasm -m 'test*' \
+#         -p "WASM_Path = filter_dp.$wasm_optimization" \
+#         -p "Function_Name = filter_dp" \
+#         -p "accessible_paths = filters" \
+#     -o stdout -m '*'
 
 # 3. Evaualtion stage
 FROM docker.io/jupyter/minimal-notebook:latest as notebook
 WORKDIR /notebook
-COPY project.ipynb requirements.txt /notebook/
+COPY project.ipynb requirements.txt ./
 RUN pip install -r requirements.txt
 COPY input input/
 COPY --from=fluent-runner /fluent-bit/output/ output/

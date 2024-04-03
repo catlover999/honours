@@ -7,7 +7,11 @@ use rv::{
 use serde::Deserialize;
 use serde_json::{json, Number, Value};
 use std::{
-    collections::{hash_map::DefaultHasher, HashMap}, ffi::CString, fs, hash::{Hash, Hasher}, slice, str
+    collections::{hash_map::DefaultHasher, HashMap},
+    ffi::CString,
+    fs,
+    hash::{Hash, Hasher},
+    slice, str,
 };
 
 #[no_mangle]
@@ -21,23 +25,25 @@ pub extern "C" fn filter_dp(
 ) -> *const u8 {
     // Process tag and record using anyhow for error handling
     let tag_result = unsafe { slice::from_raw_parts(tag, tag_len as usize) };
-    let tag = str::from_utf8(tag_result).map_err(|e| anyhow!(e)).expect("Invalid UTF-8 in tag");
+    let tag = str::from_utf8(tag_result)
+        .map_err(|e| anyhow!(e))
+        .expect("Invalid UTF-8 in tag");
 
     let record_result = unsafe { slice::from_raw_parts(record, record_len as usize) };
-    let record = serde_json::from_slice(record_result).map_err(|e| anyhow!(e)).expect("Invalid JSON in record");
+    let record = serde_json::from_slice(record_result)
+        .map_err(|e| anyhow!(e))
+        .expect("Invalid JSON in record");
 
     // Apply noise to the records
-    let noisy_records: Value = add_noise_to_records(tag, record).expect("Error adding noise to records");
-
-    //noisy_records.to_string().as_ptr()
-    let noisy_records_str = noisy_records.to_string();
-    let c_str = CString::new(noisy_records_str).expect("CString::new failed");
-    let ptr = c_str.into_raw(); // Leak the CString into raw pointer to avoid it being deallocated
+    let noisy_records: Value = add_noise_to_records(tag, record);
+    
+    // Leak the CString into raw pointer to avoid it being deallocated
+    let c_str = CString::new(noisy_records.to_string()).expect("CString::new failed");
+    let ptr = c_str.into_raw();
     ptr as *const u8
-
 }
 
-fn add_noise_to_records(tag: &str, mut records: Value) -> Result<Value> {
+fn add_noise_to_records(tag: &str, mut records: Value) -> Value {
     // Check if there is a settings file for the given tag
     match load_configuration(tag) {
         Ok(config) => {
@@ -45,7 +51,7 @@ fn add_noise_to_records(tag: &str, mut records: Value) -> Result<Value> {
             println!("Loaded config");
             if let Value::Object(ref mut map) = records {
                 for (record_key, record_value) in map.iter_mut() {
-                    if let Err(error) = check_settings_for_record(record_key, record_value, &config) {
+                    if let Err(error) = check_settings_for_record(record_key, record_value, &config){
                         eprintln!("Error: {:?}", error);
                     }
                 }
@@ -55,11 +61,11 @@ fn add_noise_to_records(tag: &str, mut records: Value) -> Result<Value> {
             eprintln!("Error loading configuration: {:?}", error);
         }
     }
-    Ok(records)
+    records
 }
 
 fn load_configuration(tag: &str) -> Result<HashMap<String, Noise>> {
-    let settings_file = format!("{}.toml", tag);
+    let settings_file = format!("filters/{}.toml", tag);
     let contents = fs::read_to_string(&settings_file)
         .map_err(|e| anyhow!("Failed to read settings file: {}", e))?;
     toml::from_str::<HashMap<String, Noise>>(&contents)
@@ -75,21 +81,38 @@ fn check_settings_for_record(
     println!("{}:{}", record_key, record_value);
     if let Some(setting) = config.get(record_key) {
         match setting {
-            Noise::Laplace { mu, sensitivity, epsilon, optional } => {
+            Noise::Laplace {
+                mu,
+                sensitivity,
+                epsilon,
+                optional,
+            } => {
                 let b = sensitivity / epsilon;
                 let laplace = Laplace::new(*mu, b).map_err(|e| anyhow!(e))?;
                 *record_value = json!(add_noise_to_value(
                     Laplace(laplace),
-                    record_value.as_number().ok_or_else(|| anyhow!("Value not numeric"))?.clone(),
+                    record_value
+                        .as_number()
+                        .ok_or_else(|| anyhow!("Value not numeric"))?
+                        .clone(),
                     optional
                 )?);
-            },
-            Noise::Gaussian { mu, sensitivity, epsilon, delta, optional } => {
+            }
+            Noise::Gaussian {
+                mu,
+                sensitivity,
+                epsilon,
+                delta,
+                optional,
+            } => {
                 let sigma = ((2.0 * (1.25 / delta).ln() * sensitivity.powi(2)) / epsilon.powi(2)).sqrt();
                 let gaussian = Gaussian::new(*mu, sigma).map_err(|e| anyhow!(e))?;
                 *record_value = json!(add_noise_to_value(
                     Gaussian(gaussian),
-                    record_value.as_number().ok_or_else(|| anyhow!("Value not numeric"))?.clone(),
+                    record_value
+                        .as_number()
+                        .ok_or_else(|| anyhow!("Value not numeric"))?
+                        .clone(),
                     optional
                 )?);
             }
@@ -116,10 +139,15 @@ fn add_noise_to_value(
 
     // Creates the noise from the distribution
     let noise: f64 = distribution.draw(&mut rng).into();
+    
+    #[cfg(debug_assertions)]
+    println!("Noise: {}", noise);
+
     // Adds the noise to the value using the specified unit, returns as a serde_json Number
     match optional.unit {
-        Units::int => Ok(Number::from(value.as_i64().unwrap() + noise as i64)),
-        Units::float => Ok(Number::from_f64(value.as_f64().unwrap() + noise).ok_or_else(|| anyhow!("Failed to create float number"))?),
+        Units::int => Ok(Number::from(value.as_f64().unwrap() as i64 + noise as i64)),
+        Units::float => Ok(Number::from_f64(value.as_f64().unwrap() + noise)
+            .ok_or_else(|| anyhow!("Failed to create float number"))?),
     }
 }
 
