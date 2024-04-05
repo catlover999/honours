@@ -1,6 +1,7 @@
 # Build arguments
 ARG wasm_optimization=aot
 ARG rust_profile=release
+ARG fluent_bit_version=v3.0.1
 
 # 1. Build stages for filter_dp
 FROM docker.io/rust:latest AS builder 
@@ -18,7 +19,6 @@ RUN if [ "${rust_profile}" != "debug" ]; then \
 # 2. Fluent Bit Stage
 FROM debian:bookworm-slim as fluent
 ENV DEBIAN_FRONTEND=noninteractive
-WORKDIR /src/fluent-bit/build/
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libcurl4-openssl-dev \
@@ -43,12 +43,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libmlir-14-dev libclang-common-14-dev libedit-dev libpfm4-dev llvm-14-dev libpolly-14-dev && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
     mkdir -p /fluent-bit/bin /fluent-bit/etc /fluent-bit/log
-COPY fluent-bit/ /src/fluent-bit
+ARG fluent_bit_version
+RUN git clone --depth 1 --branch=$fluent_bit_version https://github.com/fluent/fluent-bit.git /src/fluent-bit
+WORKDIR /src/fluent-bit/build/
 RUN cmake -DFLB_WAMRC=On .. && \
     make && \
     install bin/fluent-bit /fluent-bit/bin/ && \
     install bin/flb-wamrc /fluent-bit/bin/
-COPY fluent-bit/conf/*.conf /fluent-bit/etc/
+RUN cp /src/fluent-bit/conf/*.conf /fluent-bit/etc/
 
 FROM fluent as fluent-wasm
 WORKDIR /fluent-bit
