@@ -11,7 +11,7 @@ COPY filter_dp/Cargo.toml .
 COPY filter_dp/src src
 ARG rust_profile
 RUN if [ "${rust_profile}" != "debug" ]; then \
-      cargo build --${rust_profile} --target wasm32-wasi; \
+      cargo build --profile ${rust_profile} --target wasm32-wasi; \
     else \
       cargo build --target wasm32-wasi; \
     fi
@@ -44,13 +44,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
     mkdir -p /fluent-bit/bin /fluent-bit/etc /fluent-bit/log
 ARG fluent_bit_version
-RUN git clone --depth 1 --branch=$fluent_bit_version https://github.com/fluent/fluent-bit.git /src/fluent-bit
+RUN git clone --depth 1 --branch=$fluent_bit_version https://github.com/fluent/fluent-bit.git /src/fluent-bit && \
+    cp /src/fluent-bit/conf/*.conf /fluent-bit/etc/
 WORKDIR /src/fluent-bit/build/
 RUN cmake -DFLB_WAMRC=On .. && \
     make && \
     install bin/fluent-bit /fluent-bit/bin/ && \
     install bin/flb-wamrc /fluent-bit/bin/
-RUN cp /src/fluent-bit/conf/*.conf /fluent-bit/etc/
 
 FROM fluent as fluent-wasm
 WORKDIR /fluent-bit
@@ -67,7 +67,7 @@ COPY input input
 COPY filters filters
 RUN mkdir output
 ARG wasm_optimization
-RUN stdbuf -oL bin/fluent-bit -c fluent-bit.conf | { \
+RUN bin/fluent-bit -c fluent-bit.conf | { \
     grep -m 1 "Quit" && \
     pkill -SIGTERM fluent-bit; \
     sleep 5; \
