@@ -1,0 +1,148 @@
+\chapter{Technologies Chosen\label{chap:{technologies}}}
+
+
+\section{Rust}
+\subsection{RV}
+RV is a Rust crate for probabilistic modeling which was chosen for it's ability to cover a wide variety of distributions. Intial attempts were made to use the OpenDP library for this purpose, however after initial hurdles of getting the package to compile for the WASM/WASI environment were overcome (with a feature flag to disable the optional dependency on OpenSSL, which doesn't have an upstream port for WASM) it was found that the documented "Measurements" module was seemingly not present in the crate. OpenDP has a wide purview of wishing to support many different differential privacy algorithms, not only for the use case of making differentially private queries on a dataset but also concerns itself on making measures and transformations on entire datasets. This added level of feature complexity isn't required for our use case, with the dual limitations imposed on us by using Local (in contrast to Global) Differential Privacy and with maintaining state across WASM function invocations.   
+
+What RV provides us is a way to create distributions and to make a random draw on said distribution, no more. Currently the Laplace and Gaussian distributions are supported by the application, however the program is structured in such a way to make it trivial to use any of RV's supported Distributions. The \mintinline{rust}{fn add_noise_to_value()} function is Distribution agnostic, taking any distribution defined by RV's enum of all supported distributions.
+\begin{listing}[!ht]
+\caption{Enum from rv::dist::distribution}
+\label{code:rv}
+\begin{minted}[mathescape]{rust}
+pub enum Distribution {
+    Bernoulli(super::Bernoulli),
+    Beta(super::Beta),
+    BetaBinomial(super::BetaBinomial),
+    Binomial(super::Binomial),
+    Categorical(super::Categorical),
+    Cauchy(super::Cauchy),
+    ChiSquared(super::ChiSquared),
+    Dirichlet(super::Dirichlet),
+    SymmetricDirichlet(super::SymmetricDirichlet),
+    Exponential(super::Exponential),
+    Gamma(super::Gamma),
+    Gaussian(super::Gaussian),
+    Geometric(super::Geometric),
+    Gev(super::Gev),
+    InvChiSquared(super::InvChiSquared),
+    InvGamma(super::InvGamma),
+    InvGaussian(super::InvGaussian),
+    KsTwoAsymptotic(super::KsTwoAsymptotic),
+    Kumaraswamy(super::Kumaraswamy),
+    Laplace(super::Laplace),
+    LogNormal(super::LogNormal),
+    NegBinomial(super::NegBinomial),
+    Pareto(super::Pareto),
+    Poisson(super::Poisson),
+    Product(super::ProductDistribution),
+    ScaledInvChiSquared(super::ScaledInvChiSquared),
+    Skellam(super::Skellam),
+    StudentsT(super::StudentsT),
+    Uniform(super::Uniform),
+    VonMises(super::VonMises),
+}
+\end{minted}
+\end{listing}
+
+This allows us to add additional features with a high degree of code reuse. You only need to add the relevant distribution-specific properties to the relevant \mintinline{rust}{enum Noise {...}} and any distribution-specific calculations to the \mintinline{rust}{match setting {...}} in \mintinline{rust}{fn process_setting_for_record}. 
+
+\subsection{Error handling}
+For this project, the anyhow package was chosen to 
+
+\subsection{rand}
+\subsection{serde}
+Serde is often considered one of the "core" crates is by far the most popular way to serialize and deserialize common text encoding formats to a Rust-native representation. The application uses serde both to manipulate the inputted JSON-encoded records and to deserialize the TOML-based settings files. The application uses several different strategies to make code reuse and extendability easier.
+\begin{minted}{rust}
+#[derive(Deserialize)]
+#[serde(tag = "type")]
+enum Noise {
+    Laplace {
+        #[serde(default = "default_mu")]
+        mu: f64,
+        sensitivity: f64,
+        epsilon: f64,
+        #[serde(flatten)]
+        optional: OptionalSettings,
+    },
+    Gaussian {
+        #[serde(default = "default_mu")]
+        mu: f64,
+        sensitivity: f64,
+        epsilon: f64,
+        delta: f64,
+        #[serde(flatten)]
+        optional: OptionalSettings,
+    },
+}
+\end{minted}
+The above \mintinline{rust}{enum} defines the distribution-specific settings associated with each distribution type. It derives the \mintinline{rust}{Deserialize} trait from the \mintinline{rust}{serde} crate. It uses serde's internal tagging feature, \mintinline{rust}{#[serde(tag = "type")]}, to use one of the struct's name's in the enum as a field labelled "type" in a TOML file. To elaborate what this equates to, this is an example TOML file that would be matched by the deserializer.
+\begin{minted}{toml}
+[example_record]
+type = "Laplace"
+sensitivity = 4.2
+epsilon = 0.9
+[example2]
+type = "Gaussian"
+sensitivity = 1
+epsilon = 1
+delta = 5
+\end{minted}
+In the case of an incomplete or otherwise corrupt setting, a message is sent to Anyhow (to be captured by the relevant logging infrastructure in use) if an invalid setting is given. If no such setting exists for a record, then that record is skipped from the noise addition process and is passed back to Fluent Bit without modification. 
+
+\begin{minted}{rust}
+fn default_mu() -> f64 {
+    0.0
+}
+#[derive(Deserialize)]
+struct OptionalSettings {
+    rng_seed: Option<String>,
+    #[serde(default = "Units::default_unit")]
+    unit: Units,
+}
+
+#[derive(Deserialize)]
+#[allow(non_camel_case_types)]
+enum Units {
+    int,
+    float,
+}
+
+impl Units {
+    fn default_unit() -> Self {
+        Units::float
+    }
+}
+\end{minted}
+The above shows the current behaviour regarding default values. Although a bit verbose, it makes sure that the compiler and Serde know what's going on to store items in memory optimally. The default\_mu() and default\_unit() functions should be optimized out by the compiler with inlining and constant propagation. Using an enum for Units allows greater flexibility when specifying new types, as you just need to add the desired value to the enum before adding specific handling code in the match statement in \mintinline{rust}{fn add_noise_to_value}.
+
+Using a struct for OptionalSettings has significantly reduced code duplication and vastly simplified the process of adding additional settings as the individual distribution code can pass a generic OptionalSettings variable to \mintinline{rust}{fn add_noise_to_value}, meaning that you can add additional settings and setting handling code with the result being applied to every distribution you implement. With the use of Serde JSON's \mintinline{rust}{#[serde(flatten)]} container attribute, all values contained within OptionalSettings are tried as if they were on the same level as the variables contained within the parent struct. For example:
+
+\begin{minted}{toml}
+[example_optional]
+type = "Laplace"
+sensitivity = 4.2
+epsilon = 0.9
+rng_seed = "Differential Privacy!"
+unit = "int"
+\end{minted}
+Without \mintinline{rust}{#[serde(flatten)]}, OptionalSettings would be treated as a sub-entry in the TOML file. Do note however this will only flatten one level, so if a future need arises where it would be desirable to add sub-settings within OptionalSettings, that would treated as a TOML sub-entry (unless \mintinline{rust}{#[serde(flatten)]}) is specified for that separate entry again.
+
+\section{Fluent Bit}
+Fluent Bit is a popular open-source data processor and log forwarder, which allows for the collection, processing, and shipping of log data and metrics to multiple destinations. It's designed to be lightweight and efficient, with a small memory footprint, making it suitable for high-performance environments such as cloud-based applications, IoT devices, and large-scale logging solutions. It focuses on receiving and interpreting events which may contain several key-value pair records, applying filters to said records, and routing them to a data sink. It's written in C and is designed to use few dependencies and supports a variety of targets including Linux, macOS, *BSD, and Windows. Fluent Bit is part of the Fluentd Ecosystem of products, which aims to simplify data collection and processing. It acts as a direct successor to the Ruby-written Fluentd, an alternative log and metric processor.
+
+At its core, Fluent Bit operates on a pluggable architecture, supporting a variety of input sources, filters for data processing, and output destinations. This modular design allows users to tailor the data pipeline according to their specific needs.
+\begin{enumerate}
+    \item Input: Fluent Bit starts by collecting data from various sources. These sources can be logs from files, system metrics, or data over the network. The input plugins are responsible for fetching this data and bringing it into Fluent Bit's internal processing pipeline. Common input plugins include tail (for tailing logs from files), mem (for memory metrics), and CPU (for CPU metrics).
+    \item Processing: Once data is collected, it can be processed and transformed using filters. This step is crucial for preparing the data for its final destination, allowing for actions such as adding or removing records, modifying content, or aggregating logs. Processing can involve multiple filters, and Fluent Bit offers a range of filter plugins like grep (for filtering logs based on patterns), modify (for changing log content), and throttle (for limiting data throughput). This is where we can use Fluent Bit's facility to modify record content through a WASM filter plugin is used.
+    \item Buffering: Fluent Bit can buffer data to disk or memory before sending it to the output destination. Buffering is important as it helps in managing data flow, ensuring that data is not lost during transmission spikes or network issues. The buffering mechanism can be configured to adjust the memory and storage usage based on the environment's requirements.
+    \item Output: Finally, the processed and optionally buffered data is sent to one or more destinations. Fluent Bit supports a wide range of output plugins, allowing data to be forwarded to databases, logging services, monitoring tools, or storage systems. Some popular output destinations include Elasticsearch, Kafka, HTTP endpoints, and cloud services like Amazon S3 and Google Cloud Storage.
+\end{enumerate}
+Fluent Bit's lightweight design, flexibility, and portability makes it a popular choice for log and metric collection in various environments. Its ability to scale and handle large volumes of data efficiently, combined with the ease of customization through plugins, has contributed to its widespread adoption in industry.
+
+\section{WASM}
+The decision was taken early on to use Fluent Bit's built-in support for running Filter and Input plugins using WebAssembly. WebAssembly is a binary instruction format designed to allow running code from a large variety of compiled languages to run in a cross-architecture way at greater speed.\cite{Webassembly} Fluent Bit provides examples and officially supports the use of Go and Rust as Filter plugins.  
+
+\subsection{WAMR}
+\section{OCI}
+The decision to go with a Dockerfile 
