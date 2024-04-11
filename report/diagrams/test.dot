@@ -1,0 +1,40 @@
+digraph G {
+    node [shape=box];
+
+    subgraph cluster_input {
+        label = "Input Processing";
+        input_bytes [label="Input JSON (Bytes)", shape=oval];
+        parse_json [label="Parse JSON"];
+        input_bytes -> parse_json;
+    }
+
+    subgraph cluster_config {
+        label = "Load Configuration";
+        tag [label="Tag"];
+        load_config [label="Load Configuration from File"];
+        tag -> load_config;
+    }
+
+    subgraph cluster_noise_addition {
+        label = "Noise Addition";
+        subgraph cluster_per_record {
+            label = "Per Record";
+            check_config [label="Check Config for Record"];
+            add_noise [label="Add Noise"];
+            update_record [label="Update Record Value"];
+            check_config -> add_noise -> update_record;
+        }
+        parse_json -> check_config;
+        load_config -> check_config;
+    }
+
+    subgraph cluster_output {
+        label = "Output Generation";
+        to_string [label="Convert to String"];
+        to_cstring [label="Convert to CString"];
+        to_raw_ptr [label="Convert to Raw Pointer"];
+        update_record -> to_string -> to_cstring -> to_raw_ptr;
+        output_ptr [label="Output Pointer (Raw)", shape=oval];
+        to_raw_ptr -> output_ptr;
+    }
+}

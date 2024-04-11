@@ -1,0 +1,92 @@
+\chapter{Implementation\label{chap:implementation}}
+\section{Functional Requirements}
+
+\begin{enumerate}
+    \item The system must support the compilation and execution of a Rust-based WebAssembly module for data processing.
+    \item The WebAssembly module shall accept data records and tags as input and return a modified version of the data record.
+    \item The system must apply differential privacy techniques to data records using either Laplace or Gaussian noise distributions, as specified by configuration settings.
+    \item Configuration settings for differential privacy parameters (such as mean, sensitivity, epsilon, and delta) must be customizable through TOML files associated with specific data tags.
+    \item The system shall offer support for optional settings in the differential privacy configuration, including the choice of a random number generator seed and the unit of measurement for noise application (integer or float).
+    \item Error handling within the WebAssembly module must be robust, allowing for graceful degradation in the presence of malformed data records or configuration files.
+    \item The Docker environment for the project must be configured to support the Rust development environment, Fluent Bit with WASM support, and an evaluation stage with Jupyter Notebook integration.
+    \item The Fluent Bit integration must include the capability to process and forward logs with the addition of differential privacy measures implemented in the WebAssembly module.
+    \item The system should provide a method for ahead-of-time (AOT) compilation of the WebAssembly module to optimize performance based on the 'wasm\_optimization` configuration.
+    \item The evaluation stage of the system must allow for the analysis and reporting of processed data within a Jupyter Notebook environment, with dependencies specified in a `requirements.txt` file.
+\end{enumerate}
+
+\section{Rust library implimentation}
+\subsection{Overview of data flow}
+\subsection{Loadable settings}
+\subsection{Adding noise to a record}
+
+\section{Differential Privacy Implementation}
+\subsection{Laplace Distribution}
+
+The Laplace Distribution, also known as the double exponential distribution, plays a pivotal role in differential privacy due to its tail behaviour, which ensures that the probability of adding a large amount of noise decreases exponentially. Mathematically, the Laplace distribution with scale $b$ is expressed by its probability density function:
+
+\begin{equation}
+Lap(x|b) = \frac{1}{2b} \exp\left(-\frac{|x|}{b}\right)
+\end{equation}\citep[Def. 3.2]{Dwork2013}
+
+Centred at zero, the scale parameter $b$ determines the spread of the distribution. The variance of this distribution is $ \sigma^2 = 2b^2 $, reflecting how spread out values are around the mean\citep[p. 31]{Dwork2013}.
+
+In the context of Differential Privacy, the Laplace distribution's symmetric nature makes it an ideal choice for introducing noise into the data. When noise is drawn from a Laplace distribution, it is done so with a scale proportional to the function's sensitivity and inversely proportional to the privacy budget $\epsilon$, effectively balancing privacy and accuracy\citep[p. 31]{Dwork2013}. For this reason, it is one of the most commonly used distributions in the Differential Privacy literature. 
+
+\subsection{Gaussian Distribution}
+
+While the Laplace distribution is often preferred for its simplicity, the Gaussian Distribution is an alternative that is used under certain conditions in Differential Privacy. This distribution is defined by its mean (usually zero in the DP context) and its standard deviation. Unlike the Laplace distribution, the Gaussian is characterized by its bell-shaped curve and offers a different trade-off between privacy and data utility.
+
+In Differential Privacy, particularly under the $(\epsilon, \delta)$-framework, the Gaussian distribution can be used to add noise to the output of a function. The variance of this noise is calibrated to the function's sensitivity and the privacy loss parameters $\epsilon$ and $\delta$. This calibration ensures that the Gaussian Mechanism achieves $(\epsilon, \delta)$-differential privacy, allowing for a small probability of error in exchange for potentially improved utility\citep[p. 31]{Dwork2013}.
+
+Both distributions offer mechanisms that are crucial for the privacy-preserving properties of differential privacy, with their use depending on the specific requirements and constraints of the input data processing task at hand. Both are valid distributions in the realm of Differential Privacy
+
+\subsection{Laplace Mechanism}
+The Laplace Mechanism is a method to achieve $\epsilon$-differential privacy by adding noise sampled from a Laplace distribution to the output of a function. The scale of the Laplace distribution is directly proportional to the sensitivity of the function and inversely proportional to the privacy loss parameter, $\epsilon$. This mechanism is widely used due to its simplicity and effectiveness in ensuring that the presence or absence of a single individual in the dataset does not significantly affect the output, thus maintaining privacy.
+\begin{definition}[Laplace Mechanism]
+Given any function $f: \mathbb{N}^{|\mathcal{X}|} \rightarrow \mathbb{R}^k$, the Laplace mechanism is formally defined as:
+\begin{equation}
+\mathcal{M}_L(f(\cdot), \epsilon) = f(x) + (Y_1, \ldots, Y_k)
+\end{equation}
+where $Y_i$ are independent and identically distributed (i.i.d.) random variables drawn from the Laplace distribution $Lap(\Delta f/\epsilon)$. This definition has been extracted from \citeauthor{Dwork2013} page 32.
+\end{definition}
+Here, $\Delta f$ denotes the \textit{sensitivity} of the function, which is a measure of how much a single individual's data can change the output of $f$. The parameter $\epsilon$ is known as the \textit{privacy budget}, which controls the trade-off between privacy and accuracy: a smaller $\epsilon$ provides stronger privacy but less accurate results.
+
+The choice of the Laplace distribution is due to its property that the probability of adding a large noise decays exponentially, ensuring that more extreme modifications to the data (which could compromise privacy) are less likely. This makes it particularly suitable for the purpose of maintaining differential privacy.
+
+\subsection{Gaussian Mechanism}
+The Gaussian Mechanism provides a means to achieve $(\epsilon, \delta)$-differential privacy, a relaxation of $\epsilon$-differential privacy that allows for a small probability of failure. Noise from a Gaussian distribution is added to the function's output, where the amount of noise is determined by both the function's sensitivity and the desired privacy parameters, $\epsilon$ and $\delta$. The Gaussian Mechanism is particularly useful in scenarios where the Laplace Mechanism's strict privacy guarantees are not required, allowing for greater flexibility in balancing privacy and data utility.
+
+\subsection{Differential Privacy limitations}
+
+\subsection{OpenDP intergration issues}
+A number of issues were incounted when trying to integrate OpenDP into the WASM environment. First the documentation is not fully up-to-date as for the past few dozen builds the automatically generated API documentation hosted on docs.rs failed to generate due to document compilation errors. OpenDP cannot run with it's default feature set in WASM it it has an optional dependency on openssl-sys which doesn't support WASM platforms. The good thing is, OpenSSL is only used once in OpenDP's codebase and is wrapped in a feature flag which can be disabled if you disable the default feature set when specifying the OpenDP dependency in your Cargo.toml file. The next issue that was faced was that in the latest version of OpenDP, the 
+\section{WASM Filter plugin}
+Fluent Bit has support for Filter and Input plugins in the form of loading a WASM binary and executing a configurable function inside the binary using a fixed ABI. That ABI corresponds to a single event containing a tag (and tag length), time (both seconds and nanoseconds), and a message (and message length). The message in the current stable release (as of v2.2.2) is a JSON-formatted string containing a list of key, value pairs corresponding 
+
+\subsection{WASM limitations}
+The choice of going with a WASM filter plugin does pose additional challenges compared to writing a native plugin. The main issue is with variable scope, each time Fluent Bit makes a call to a WASM plugin it needs to reinitialize the plugin before sending the tagged event to the plugin's prescribed ABI. This means that state between WASM function calls is not easy to achieve. 
+
+
+
+\subsection{}
+\begin{tikzpicture}[
+    node distance=1.5cm and 2cm,
+    every node/.style={draw, rectangle, align=center, minimum height=2em, font=\sffamily},
+    edge label/.style={midway, fill=white, font=\sffamily\small}
+]
+  % Nodes
+  \node (builder) {Rust Build\\(rust:latest)};
+  \node[below=of builder] (fluent) {Fluent Bit Setup\\(debian:bookworm-slim)};
+  \node[right=of fluent] (fluent_wasm) {WASM Plugin\\(fluent-wasm)};
+  \node[below=of fluent_wasm] (fluent_aot) {AOT Compilation\\(fluent-aot)};
+  \node[left=of fluent_aot] (fluent_runner) {Fluent Runner\\(fluent-\{wasm\_optimization\})};
+  \node[below=of fluent_runner] (notebook) {Jupyter Notebook\\(jupyter/minimal-notebook:latest)};
+
+  % Edges
+  \draw[->] (builder) -- node[edge label] {Copy WASM} (fluent_wasm);
+  \draw[->] (fluent) -- (fluent_wasm);
+  \draw[->] (fluent_wasm) -- node[edge label] {Convert to AOT} (fluent_aot);
+  \draw[->] (fluent_wasm) -- (fluent_runner);
+  \draw[->] (fluent_aot) -- (fluent_runner);
+  \draw[->] (fluent_runner) -- node[edge label] {Copy Output} (notebook);
+\end{tikzpicture}

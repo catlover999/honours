@@ -1,0 +1,19 @@
+\chapter{Literature Review\label{chap:lit-review}}
+
+\section{Differential Privacy: Theoretical Foundations}
+Differential Privacy is an area of active research both from academia and industry. Notable groups engaged in the field are Microsoft's AI Lab, Google's Research, Harvard's Privacy Tools Project, Apple's Machine Learning Research - Differential Privacy Team. 
+
+Differential Privacy (DP) has emerged as the de facto standard for privacy-preserving data analysis, providing a framework to quantify and control the privacy loss incurred when statistical analyses are performed on sensitive data. The seminal work by \citep{Dwork2006} introduced the concept of DP and proposed a mechanism for privacy-preserving statistical database queries by adding calibrated noise to the query outputs. This work demonstrated that privacy could be preserved by adjusting the noise scale according to the sensitivity of the function being computed, ensuring that the presence or absence of any single individual in the dataset does not significantly affect the outcome of the analysis. This foundational principle is at the heart of differential privacy and guides the development of privacy-preserving technologies.
+
+The concept of Differential Privacy (DP) was formalized by Dwork et al., establishing a framework to protect individuals' privacy when their data is included in statistical analyses. The introduction of DP provided a robust mathematical definition of privacy guarantees, applicable irrespective of external information sources\cite{Dwork2006}. This foundational work laid the groundwork for subsequent research in the area, defining $\epsilon$-differential privacy, a parameter that quantifies the privacy loss in data analysis outputs.
+
+Subsequent research by Dwork et al. further explored the mechanics of DP, focusing on the design of mechanisms that add noise to the outputs of database queries based on their sensitivity—a measure of how much a query's outcome can be altered by changing a single individual's data in the database\cite{Dwork2006}. This work introduced the Laplace mechanism, a method for adding noise scaled to the query's sensitivity, ensuring that the presence or absence of any individual's data does not significantly affect the query's output.
+
+The Gaussian mechanism, another pivotal contribution to DP, was introduced to address scenarios where the Laplace mechanism's noise distribution was not ideal due to its heavy tails. The Gaussian mechanism provides an alternative that, under certain conditions, offers better trade-offs between privacy and accuracy, particularly in the context of numeric data analysis\cite{Dwork2013}.
+
+In addition to these core mechanisms, the concept of the privacy budget was introduced, highlighting the cumulative nature of privacy loss across multiple queries and the importance of managing this budget to maintain robust privacy guarantees over time\cite{McSherry2007}.
+
+Theoretical advancements have also been made in understanding the composability of differential privacy, demonstrating how multiple DP mechanisms can be combined while quantitatively analyzing the resulting overall privacy guarantee. This work has been crucial for developing complex, privacy-preserving analytical frameworks\cite{Dwork2013}.
+
+Lastly, the concept of global and local differential privacy has differentiated between privacy guarantees provided by a trusted curator (global DP) versus those provided in a decentralized manner, where individuals perturb their data (local DP). This distinction has broadened the applicability of DP to various data collection and analysis scenarios\cite{kasiviswanathan2010learn}.
+
