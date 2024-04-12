@@ -28,18 +28,19 @@ pub extern "C" fn filter_dp(
         .map_err(|e| anyhow!(e))
         .unwrap();
 
-    let mut json_records: Value = serde_json::from_slice(unsafe { slice::from_raw_parts(records, record_len as usize) })
-        .map_err(|e| anyhow!(e))
-        .unwrap();
+    let mut json_records =
+        serde_json::from_slice(unsafe { slice::from_raw_parts(records, record_len as usize) })
+            .map_err(|e| anyhow!(e))
+            .unwrap();
 
     // Apply noise to the records
-    let noisy_records = match add_noise_to_records(tag, &mut json_records){
+    let noisy_records = match add_noise_to_records(tag, &mut json_records) {
         Ok(noisy) => noisy,
         Err(e) => {
             // Prints to stderr. Fluent Bit hooks it's stderr into WAMR. Depending on deployment requirements, it may make sense to use an alternative logging library.
             eprintln!("{}", e.to_string());
             &mut json_records
-        },
+        }
     };
 
     // Leak the CString into a raw pointer to avoid it being deallocated
@@ -48,7 +49,7 @@ pub extern "C" fn filter_dp(
         .into_raw() as *const u8
 }
 
-fn add_noise_to_records<'a>(tag: &str, records: &'a mut Value) -> Result< &'a mut Value> {
+fn add_noise_to_records<'a>(tag: &str, records: &'a mut Value) -> Result<&'a mut Value> {
     // Check if there is a settings file for the given tag
     if let Ok(config) = load_configuration(tag) {
         #[cfg(debug_assertions)]
@@ -105,7 +106,8 @@ fn process_setting_for_record(
                 delta,
                 optional,
             } => {
-                let sigma = ((2.0 * (1.25 / delta).ln() * sensitivity.powi(2)) / epsilon.powi(2)).sqrt();
+                let sigma =
+                    ((2.0 * (1.25 / delta).ln() * sensitivity.powi(2)) / epsilon.powi(2)).sqrt();
                 let gaussian = Gaussian::new(*mu, sigma).map_err(|e| anyhow!(e))?;
                 *record_value = json!(add_noise_to_value(
                     Gaussian(gaussian),
