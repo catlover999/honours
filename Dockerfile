@@ -56,16 +56,17 @@ FROM fluent as fluent-wasm
 WORKDIR /fluent-bit
 ARG rust_profile
 COPY --from=builder /filter_dp/target/wasm32-wasi/$rust_profile/filter_dp.wasm .
-COPY fluent-bit.conf .
 
 FROM fluent-wasm as fluent-aot
 RUN bin/flb-wamrc -o filter_dp.aot filter_dp.wasm
+COPY fluent-bit.conf .
 RUN sed -i 's/WASM_Path filter_dp.wasm/WASM_Path filter_dp.aot/g' fluent-bit.conf
 
 FROM fluent-${wasm_optimization} as fluent-runner
+RUN mkdir output
 COPY input input
 COPY filters filters
-RUN mkdir output
+COPY parsers.conf .
 ARG wasm_optimization
 RUN bin/fluent-bit -c fluent-bit.conf | { \
     grep -m 1 "Quit" && \
