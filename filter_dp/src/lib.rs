@@ -1,3 +1,4 @@
+use log::{debug, error, warn};
 use rand::{rngs::StdRng, thread_rng, RngCore, SeedableRng};
 use rv::{
     dist::{Distribution, Distribution::*, Gaussian, Laplace},
@@ -25,12 +26,12 @@ pub extern "C" fn filter_dp(
 ) -> *const u8 {
     // Process event's tag and records into Rust types
     let tag = str::from_utf8(unsafe { slice::from_raw_parts(tag, tag_len as usize) })
-        .map_err(|e| eprintln!("{}", e))
+        .map_err(|e| error!("{}", e))
         .unwrap();
 
     let mut json_records =
         serde_json::from_slice(unsafe { slice::from_raw_parts(records, record_len as usize) })
-            .map_err(|e| eprintln!("{}", e))
+            .map_err(|e| error!("{}", e))
             .unwrap();
 
     // Apply noise to the records
@@ -38,7 +39,7 @@ pub extern "C" fn filter_dp(
         Ok(noisy) => noisy,
         Err(e) => {
             // Prints to stderr. Fluent Bit hooks it's stderr into WAMR. Depending on deployment requirements, it may make sense to use an alternative logging library.
-            eprintln!("{}", e.to_string());
+            error!("{}", e.to_string());
             &mut json_records
         }
     };
@@ -55,11 +56,12 @@ fn add_noise_to_records<'a>(
 ) -> Result<&'a mut Value, Box<dyn Error>> {
     // Check if there is a settings file for the given tag
     if let Ok(config) = load_configuration(tag) {
-        #[cfg(debug_assertions)]
-        println!("Loaded config: {}", tag);
+        debug!("Loaded config: {}", tag);
         if let Value::Object(ref mut map) = records {
             for (record_key, record_value) in map.iter_mut() {
-                process_setting_for_record(record_key, record_value, &config)?;
+                if let Err(e) = process_setting_for_record(record_key, record_value, &config) {
+                    warn!("{}", e);
+                }
             }
         }
     }
@@ -78,8 +80,7 @@ fn process_setting_for_record(
     record_value: &mut Value,
     config: &HashMap<String, Noise>,
 ) -> Result<(), Box<dyn Error>> {
-    #[cfg(debug_assertions)]
-    println!("key: {}, value: {}", record_key, record_value);
+    debug!("key: {}, value: {}", record_key, record_value);
 
     if let Some(setting) = config.get(record_key) {
         match setting {
@@ -95,11 +96,11 @@ fn process_setting_for_record(
                     Laplace(laplace),
                     record_value
                         .as_f64()
-                        .ok_or_else(|| eprintln!("Value not numeric"))
+                        .ok_or_else(|| warn!("Value not numeric"))
                         .unwrap(),
                     optional
                 )
-                .map_err(|e| eprintln!("{}", e)));
+                .map_err(|e| warn!("{}", e)));
             }
             Noise::Gaussian {
                 mu,
@@ -115,7 +116,7 @@ fn process_setting_for_record(
                     Gaussian(gaussian),
                     record_value
                         .as_f64()
-                        .ok_or_else(|| eprintln!("Value not numeric"))
+                        .ok_or_else(|| warn!("Value not numeric"))
                         .unwrap(),
                     optional
                 )?);
@@ -144,8 +145,7 @@ fn add_noise_to_value(
     // Creates the noise from the distribution
     let noise: f64 = distribution.draw(&mut rng).into();
 
-    #[cfg(debug_assertions)]
-    println!("Noise: {}", noise);
+    debug!("Noise: {}", noise);
 
     // Adds the noise to the value using the specified unit, returns as a serde_json Number
     match optional.unit {
