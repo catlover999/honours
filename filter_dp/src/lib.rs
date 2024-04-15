@@ -15,6 +15,20 @@ use std::{
     slice, str,
 };
 
+/// Filters event records by applying differentially private noise.
+///
+/// # Arguments
+///
+/// * `tag` - A pointer to the event's tag as a byte array.
+/// * `tag_len` - The length of the tag byte array.
+/// * `_time_sec` - The timestamp of the event in seconds (unused).
+/// * `_time_nsec` - The timestamp of the event in nanoseconds (unused).
+/// * `records` - A pointer to the event's records as a byte array.
+/// * `record_len` - The length of the records byte array.
+///
+/// # Returns
+///
+/// A pointer to the JSON-formtted perturbed records as a C-compatible string.
 #[no_mangle]
 pub extern "C" fn filter_dp(
     tag: *const u8,
@@ -28,7 +42,6 @@ pub extern "C" fn filter_dp(
     let tag = str::from_utf8(unsafe { slice::from_raw_parts(tag, tag_len as usize) })
         .map_err(|e| error!("{}", e))
         .unwrap();
-
     let mut json_records =
         serde_json::from_slice(unsafe { slice::from_raw_parts(records, record_len as usize) })
             .map_err(|e| error!("{}", e))
@@ -38,7 +51,6 @@ pub extern "C" fn filter_dp(
     let noisy_records = match add_noise_to_records(tag, &mut json_records) {
         Ok(noisy) => noisy,
         Err(e) => {
-            // Prints to stderr. Fluent Bit hooks it's stderr into WAMR. Depending on deployment requirements, it may make sense to use an alternative logging library.
             error!("{}", e.to_string());
             &mut json_records
         }
@@ -50,6 +62,16 @@ pub extern "C" fn filter_dp(
         .into_raw() as *const u8
 }
 
+/// Adds differential privacy noise to the records based on the configuration for the given tag.
+///
+/// # Arguments
+///
+/// * `tag` - The tag associated with the records.
+/// * `records` - A mutable reference to the JSON records.
+///
+/// # Returns
+///
+/// A mutable reference to the noisy records on success, or an error on failure.
 fn add_noise_to_records<'a>(
     tag: &str,
     records: &'a mut Value,
@@ -68,6 +90,15 @@ fn add_noise_to_records<'a>(
     Ok(records)
 }
 
+/// Loads the configuration for the given tag from a TOML file.
+///
+/// # Arguments
+///
+/// * `tag` - The tag associated with the configuration.
+///
+/// # Returns
+///
+/// A `HashMap` containing the noise configuration on success, or an error on failure.
 fn load_configuration(tag: &str) -> Result<HashMap<String, Noise>, Box<dyn Error>> {
     let settings_file = format!("filters/{}.toml", tag);
     let contents = fs::read_to_string(&settings_file)?;
@@ -75,6 +106,17 @@ fn load_configuration(tag: &str) -> Result<HashMap<String, Noise>, Box<dyn Error
     Ok(toml)
 }
 
+/// Perturbs a value based on the noise configuration for a specific record key-value pair.
+///
+/// # Arguments
+///
+/// * `record_key` - The key of the record.
+/// * `record_value` - A mutable reference to the value of the record.
+/// * `config` - A reference to the noise configuration.
+///
+/// # Returns
+///
+/// `()` on success, or an error on failure.
 fn process_setting_for_record(
     record_key: &str,
     record_value: &mut Value,
@@ -83,6 +125,24 @@ fn process_setting_for_record(
     debug!("key: {}, value: {}", record_key, record_value);
 
     if let Some(setting) = config.get(record_key) {
+        let value: f64;
+        match record_value {
+            Value::Number(n) => match n.as_f64() {
+                Some(n) => {
+                    value = n;
+                }
+                None => return Err("Can't convert to a float".into()),
+            },
+            Value::String(s) => match s.parse::<f64>() {
+                Ok(n) => value = n,
+                Err(e) => {
+                    return Err(e.into());
+                }
+            },
+            _ => {
+                return Err("Value not numeric".into());
+            }
+        }
         match setting {
             Noise::Laplace {
                 mu,
@@ -92,15 +152,8 @@ fn process_setting_for_record(
             } => {
                 let b = sensitivity / epsilon;
                 let laplace = Laplace::new(*mu, b)?;
-                *record_value = json!(add_noise_to_value(
-                    Laplace(laplace),
-                    record_value
-                        .as_f64()
-                        .ok_or_else(|| warn!("Value not numeric"))
-                        .unwrap(),
-                    optional
-                )
-                .map_err(|e| warn!("{}", e)));
+                *record_value = json!(add_noise_to_value(Laplace(laplace), value, optional)
+                    .map_err(|e| warn!("{}", e)));
             }
             Noise::Gaussian {
                 mu,
@@ -112,20 +165,24 @@ fn process_setting_for_record(
                 let sigma =
                     ((2.0 * (1.25 / delta).ln() * sensitivity.powi(2)) / epsilon.powi(2)).sqrt();
                 let gaussian = Gaussian::new(*mu, sigma)?;
-                *record_value = json!(add_noise_to_value(
-                    Gaussian(gaussian),
-                    record_value
-                        .as_f64()
-                        .ok_or_else(|| warn!("Value not numeric"))
-                        .unwrap(),
-                    optional
-                )?);
+                *record_value = json!(add_noise_to_value(Gaussian(gaussian), value, optional)?);
             }
         }
     }
     Ok(())
 }
 
+/// Adds noise to a value based on the specified distribution and optional settings.
+///
+/// # Arguments
+///
+/// * `distribution` - The noise distribution to use.
+/// * `value` - The value to add noise to.
+/// * `optional` - The optional settings for noise generation.
+///
+/// # Returns
+///
+/// A a serde_json `Number` representing the noisy value on success, or an error on failure.
 fn add_noise_to_value(
     distribution: Distribution,
     value: f64,
