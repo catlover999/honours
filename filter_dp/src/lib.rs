@@ -152,8 +152,7 @@ fn process_setting_for_record(
             } => {
                 let b = sensitivity / epsilon;
                 let laplace = Laplace::new(*mu, b)?;
-                *record_value = json!(add_noise_to_value(Laplace(laplace), value, optional)
-                    .map_err(|e| warn!("{}", e)));
+                *record_value = json!(add_noise_to_value(Laplace(laplace), value, optional)?);
             }
             Noise::Gaussian {
                 mu,

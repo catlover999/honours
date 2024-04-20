@@ -1,0 +1,4 @@
+[math_score]
+type = "Laplace"
+epsilon = 1
+sensitivity = 1

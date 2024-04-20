@@ -1,5 +1,0 @@
-[system_p]
-type = "Gaussian"
-epsilon = 1
-sensitivity = 1
-delta = 1

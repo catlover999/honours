@@ -1,0 +1,5 @@
+[Base_Salary]
+type = "Gaussian"
+epsilon = 0.8
+sensitivity = 100
+delta = 0.0001
