@@ -1,6 +1,7 @@
 \documentclass[a4paper]{article}
 \usepackage[top=20mm, bottom=20mm, left=20mm, right=18mm, head=16mm]{geometry}
-\usepackage{listings}
+\input
+\usepackage{listings, listings-rust}
 \usepackage{hyperref}
 
 % Default fixed font does not support bold face
@@ -28,7 +29,7 @@ breaklines=true
 
 \pythonstyle
 
-\title{Example LaTeX file with your listings}
+\title{Code listing for listings}
 \author{Prof. Felipe Meneguzzi}
 
 \begin{document}
@@ -47,17 +48,6 @@ In what follows, we enumerate all files distributed with this project, for conve
 
 \lstlistoflistings
 
-\lstinputlisting[language=python, caption={Action}]{python/action.py}
+\lstinputlisting[language=Rust, caption={Filter Plugin}]{filter_dp/src/lib.rs}
 
-\lstinputlisting[language=python, caption={Benchmark}]{python/benchmark.py}
-
-\lstinputlisting[language=python, caption={Heuristic}]{python/heuristic.py}
-
-\lstinputlisting[language=python, caption={Parser}]{python/pddl_parser.py}
-
-\lstinputlisting[language=python, caption={Planner}]{python/pddl_planner.py}
-
-\lstinputlisting[language=python, caption={Preprocessor}]{python/pddl_preprocessor.py}
-
-\lstinputlisting[language=python, caption={State}]{python/state.py}
 \end{document}
