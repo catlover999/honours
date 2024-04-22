@@ -26,17 +26,17 @@ The Laplace Distribution, also known as the double exponential distribution, pla
 
 \begin{equation}
 Lap(x|b) = \frac{1}{2b} \exp\left(-\frac{|x|}{b}\right)
-\end{equation}\citep[Def. 3.2]{Dwork2013}
+\end{equation}\citep[Def. 3.2]{Dwork2014}
 
-Centred at zero, the scale parameter $b$ determines the spread of the distribution. The variance of this distribution is $ \sigma^2 = 2b^2 $, reflecting how spread out values are around the mean\citep[p. 31]{Dwork2013}.
+Centred at zero, the scale parameter $b$ determines the spread of the distribution. The variance of this distribution is $ \sigma^2 = 2b^2 $, reflecting how spread out values are around the mean\citep[p. 31]{Dwork2014}.
 
-In the context of Differential Privacy, the Laplace distribution's symmetric nature makes it an ideal choice for introducing noise into the data. When noise is drawn from a Laplace distribution, it is done so with a scale proportional to the function's sensitivity and inversely proportional to the privacy budget $\epsilon$, effectively balancing privacy and accuracy\citep[p. 31]{Dwork2013}. For this reason, it is one of the most commonly used distributions in the Differential Privacy literature. 
+In the context of Differential Privacy, the Laplace distribution's symmetric nature makes it an ideal choice for introducing noise into the data. When noise is drawn from a Laplace distribution, it is done so with a scale proportional to the function's sensitivity and inversely proportional to the privacy budget $\epsilon$, effectively balancing privacy and accuracy\citep[p. 31]{Dwork2014}. For this reason, it is one of the most commonly used distributions in the Differential Privacy literature. 
 
 \subsection{Gaussian Distribution}
 
 While the Laplace distribution is often preferred for its simplicity, the Gaussian Distribution is an alternative that is used under certain conditions in Differential Privacy. This distribution is defined by its mean (usually zero in the DP context) and its standard deviation. Unlike the Laplace distribution, the Gaussian is characterized by its bell-shaped curve and offers a different trade-off between privacy and data utility.
 
-In Differential Privacy, particularly under the $(\epsilon, \delta)$-framework, the Gaussian distribution can be used to add noise to the output of a function. The variance of this noise is calibrated to the function's sensitivity and the privacy loss parameters $\epsilon$ and $\delta$. This calibration ensures that the Gaussian Mechanism achieves $(\epsilon, \delta)$-differential privacy, allowing for a small probability of error in exchange for potentially improved utility\citep[p. 31]{Dwork2013}.
+In Differential Privacy, particularly under the $(\epsilon, \delta)$-framework, the Gaussian distribution can be used to add noise to the output of a function. The variance of this noise is calibrated to the function's sensitivity and the privacy loss parameters $\epsilon$ and $\delta$. This calibration ensures that the Gaussian Mechanism achieves $(\epsilon, \delta)$-differential privacy, allowing for a small probability of error in exchange for potentially improved utility\citep[p. 31]{Dwork2014}.
 
 Both distributions offer mechanisms that are crucial for the privacy-preserving properties of differential privacy, with their use depending on the specific requirements and constraints of the input data processing task at hand. Both are valid distributions in the realm of Differential Privacy
 
@@ -47,7 +47,7 @@ Given any function $f: \mathbb{N}^{|\mathcal{X}|} \rightarrow \mathbb{R}^k$, the
 \begin{equation}
 \mathcal{M}_L(f(\cdot), \epsilon) = f(x) + (Y_1, \ldots, Y_k)
 \end{equation}
-where $Y_i$ are independent and identically distributed (i.i.d.) random variables drawn from the Laplace distribution $Lap(\Delta f/\epsilon)$. This definition has been extracted from \citeauthor{Dwork2013} page 32.
+where $Y_i$ are independent and identically distributed (i.i.d.) random variables drawn from the Laplace distribution $Lap(\Delta f/\epsilon)$. This definition has been extracted from \citeauthor{Dwork2014} page 32.
 \end{definition}
 Here, $\Delta f$ denotes the \textit{sensitivity} of the function, which is a measure of how much a single individual's data can change the output of $f$. The parameter $\epsilon$ is known as the \textit{privacy budget}, which controls the trade-off between privacy and accuracy: a smaller $\epsilon$ provides stronger privacy but less accurate results.
 
@@ -63,10 +63,46 @@ A number of issues were incounted when trying to integrate OpenDP into the WASM 
 \section{WASM Filter plugin}
 Fluent Bit has support for Filter and Input plugins in the form of loading a WASM binary and executing a configurable function inside the binary using a fixed ABI. That ABI corresponds to a single event containing a tag (and tag length), time (both seconds and nanoseconds), and a message (and message length). The message in the current stable release (as of v2.2.2) is a JSON-formatted string containing a list of key, value pairs corresponding 
 
-\subsection{WASM limitations}
-The choice of going with a WASM filter plugin does pose additional challenges compared to writing a native plugin. The main issue is with variable scope, each time Fluent Bit makes a call to a WASM plugin it needs to reinitialize the plugin before sending the tagged event to the plugin's prescribed ABI. This means that state between WASM function calls is not easy to achieve. 
+\section{WASM limitations}
+\subsection{Variable scope}
+The choice of going with a WASM filter plugin does pose additional challenges compared to writing a native plugin. One of the main issues is pertaining to variable scope. On each evocation of a WASM function, a new instance is initialized by WAMR. Thus each instance is functionally stateless. Each settings file, where one settings file exists per Fluent Bit event, isn't internally cached by either the filter plugin itself, WAMR, or Fluent Bit. Therefore the only potential file caching that may occur exists in kernel-level filesystem read cache (details depend on the underlying operating system and backing-filesystem in-use). Regardless if any read cache could exist, it could currently only be implemented beneath the scope that could be controllable by a filter plugin.
 
+\subsection{RNG Seeds}
+The filter plugin implements an optionally seedable Pseudorandom number generator, however in practice, the application will only ever make one draw of the RNG seed per event per record. As all settings are shared between all records of the same key in all events with the same tag.
 
+It could theoretically be possible to retain RNG-state in order to achieve both determinism and pseudorandomness between records, however an alternative mechanism would have to be developed to pass around this information. With the current limitations, it wouldn't be possible to have a shared variable, but it could be possible to store state either on the filesystem or as an additional record in the event. The first option would be the easiest to implement and likely most practical. You could serialize the rng state into a tempory file, which in term would be read, drawn, and written back on each subsequent filter invocation. However that could lead to undesirable performance characteristics as this is likely to greatly increase the IO demands of the Fluent Bit pipeline; with potential locking contention as the kernel attempts to order reads and writes.
+
+The alternative is to route the RNG state through the Fluent Bit logging infrastructure. This would add significant complexity to the Fluent Bit datapipeline and may not be achievable in a desirable form. If a new record were to be created (or a set RNG record altered) for that to influence the following record a later filter stage would likely be needed to extract that particular RNG record. As Fluent Bit is first and foremost concerned with stateless data pipelines, requiring that a following event to only be processed after the current event has gone through several filter stages is a challenging task to solve. 
+
+However, in real production usecases, seedable RNGs are unlikely to be needed. And if a seedable RNG is desirable for a particular usecase (such as having a deterministic output to validate some condition), then it is unlikely to matter if the pseudorandomness is static between records of the same setting and seed. A possible usecase which wouldn't be compromised by this limitation is to validate if a pseudorandomly generated noise value is consistent with a known good value generated for integration into a system's Unit testing infrastructure. 
+
+\section{Line Splitting} \label{splitting}
+In the sample evaluation Dockerfile, the input files are split into 200 line chunks before being read by Fluent Bit (however for the later Jupyter Notebook-based analysis, the original unsplit files are used). This is because if you read the whole files directly, you encounter some memory allocation issue within Fluent Bit itself. This is unlikely to be caused by the filter plugin directly as one of the ways this issue manifests is with an empty string being sent to the \texttt{records} argument of C-ABI compatible function. This causes a panic as the filter is written with the assumption that the caller should provide it with a valid JSON string (which should account with arbitrary input into Fluent Bit, as Fluent Bit is the one responsible for creating valid JSON strings). I believe this issue must be occurring either in the Tail input plugin (which the evaluation code uses to feed data from the sample CSV) or in Fluent Bit's WAMR based WASM integration. 
+
+This should have no barring on working with larger inputs in real-world situations, as typically input sources are not static files but dynamic log sources. The solution found to get around from this limitation involves having the Tail Input plugin to read multiple files at once. Another clue that is potentially a Tail problem is that even though reading multiple files, it is doing so in the same worker instances, and directing the events (seemingly in-order from all my testing) to a single-worker WASM filter plugin instance (though note, with how I setup the dataflow of ) 
+
+In initial testing a Python script was integrated into the Dockerfile build progress, however upon diagnosing the exact cause of the issue, it was decided to switch with using the \texttt{split} utility provided by the GNU \texttt{coreutils} package as it achieved all stated aims while being easily adaptable to introduce new text files if ever so desired into the current evaluation architecture.
+\begin{minted}[breaklines]{bash}
+    RUN split -d -l 200 --additional-suffix=.csv input/EmployeeSalaries.csv input/EmployeeSalaries_ && \
+    split -d -l 200 --additional-suffix=.csv input/StudentsPerformance.csv input/StudentsPerformance_
+\end{minted}
+
+\section{Header and data formatting for ingesting evaluation data}
+While creating the evaluation part of the project, much time was sent as to how individual lines of the sample datasets should be interpreted by the application. As of the time of writing, Fluent Bit doesn't provide native support for interpreting \acrshort{csv} files however a Merge Request was previously made in \href{#5040}{https://github.com/fluent/fluent-bit/pull/5040} to add such an Input plugin however it was closed its author April 8th 2022 and there appears to be no movement since. The same author however added initial \acrshort{csv} support in Fluent bit with Merge Request \href{#5269}{https://github.com/fluent/fluent-bit/pull/5269} and subsequently published from Fluent Bit \href{v1.9.3}{https://fluentbit.io/announcements/v1.9.3/}. It doesn't appear that this adds \acrshort{csv} support for as a Parsers Format as described in \#5040. It is unclear how the functionality of this patch is actually used. Unless an alternative solution comes to fruition, the simplest way to ingest a static CSV file into Fluent Bit for offline processing is through configuring a parser manually.
+
+Static processing of each line of the CSV file may have more or less overhead than would be typical for such case. This is because what is referred to by "static processing" is through parsing each line of the csv file through a Regex parser in order to match values to their associated keys. The Regex used matches all content till each subsequent comma as to belonging to the prescribed key, till the last value which takes the remainder of the line. This is specified in the \texttt{parsers.conf} file which needs to be specified in the \texttt{[SERVICE]} section of the Fluent Bit configuration file. Fluent Bit uses the Onigmo library internally to handle Regex expressions. Onigmo compiles the given Regular Expression into an efficient bytecode-based state machine\cite{Hess_2023}, therefore, it shouldn't be any less efficient than a non-Regex approach. Fluent Bit evaluates all Regex expressions once at start time, therefore, even though streaming data through Regex is often given a bad wrap, it shouldn't pose any bottlenecks to runtime performance.
+
+There is however CSV support currently in the Output File plugin, however this lead to significant issues for my situation as Fluent Bit doesn't deterministically store records in the same order. As mentioned in \ref{splitting}, it became pertinent to ingest the evaluation example events through reading multiple smaller chunk files. However it was desirable to have all those chunk files to be written into a single output file for the original unsplit input files. However, it was found that sometimes Fluent Bit would decide on a different order for each of the columns based on which source chunk file it was deriving from. A solution for this was to write CSV headers to each of the input chunks so that the columns could be reordered by Pandas in the Jupyter Notebook. No option is documented to set set the headers or column order of the included CSV format. While Pandas does have support for multiple header rows, it was quickly decided upon that this wasn't an ideal approach. Additionally the option would encapsulate every string in double quotations, while inconsequential as Pandas has an option for removing quotation marks, it wasn't desirable either. Using Fluent Bit's File Output plugin with Format set to CSV was found to have too many problems for what it is worth for my specific scenario. I am therefore using the "template" format instead which allows me to define an arbitrary format. In this case, in the form of a statically defined CSV-complient format as below:
+\begin{minted}[breaklines]{toml}
+[OUTPUT]
+    name  file
+    path output/
+    file EmployeeSalaries.perturbed.csv
+    match salaries
+    format template
+    template {time},{Department},{Department_Name},{Division},{Gender},{Base_Salary},{Overtime_Pay},{Longevity_Pay},{Grade}
+\end{minted}
+Despite my issues that occurred when writing events from multiple input sources into a single output source, the "format csv" option for the file plugin is still useful as it can support encoding files as with arbitrary keys. This can allow for more flexible ingesting of data as the data schema isn't hardcoded into the Fluent Bit configuration file.
 
 \subsection{}
 \begin{tikzpicture}[
@@ -90,3 +126,6 @@ The choice of going with a WASM filter plugin does pose additional challenges co
   \draw[->] (fluent_aot) -- (fluent_runner);
   \draw[->] (fluent_runner) -- node[edge label] {Copy Output} (notebook);
 \end{tikzpicture}
+
+
+\section{Jupiter Notebook}

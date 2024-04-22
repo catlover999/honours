@@ -1,8 +1,13 @@
 \chapter{Introduction\label{chap:introduction}}
+\section{Overview}
 
-Data privacy is becoming increasingly crucial in the digital age, as data breaches and misuse of personal information are on the rise. Integrating Differential Privacy (DP) into data processing pipelines like Fluent Bit can significantly enhance privacy protections. This project aims to implement a DP filter within Fluent Bit using Rust and WebAssembly (WASM), providing a novel solution to protect sensitive information in device metrics while maintaining overall data utility. This approach serves to integrate the algorithms of academia into readily deployed, industry-standard tooling for data processing.
+
+
+
+The project comprises the main application, the Rust Filter plugin itself, along with the evaluation infrastructure in able to run said plugin. The evaluation infrastructure is multifaceted: coordinated by the main Dockerfile, the filter plugin is first compiled to a WASM binary, Fluent Buit is built, the WASM is optionally pre-optimized for the architecture, the filter plugin is run with Fluent Bit that feeds it 2 sample datasets and processes it with a sample configuration, finally the results are copied over to a Jupyter Notebook container. Once the Dockerfile is built, it can be run to start up a token-authenticated web server to view the Jupiter Notebook file and associated data processing.
 
 \section{Motivation}
+With the ever-increase in data collection from 
 
 \section{Objectives}
 The primary goal of the project is to develop a WASM filter plugin for Fluent Bit that applies DP techniques to numeric data on a device level (though Fluent Bit has wide application throughout the data pipeline).

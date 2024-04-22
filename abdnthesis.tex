@@ -13,11 +13,12 @@
 \makedeclaration
 
 \begin{abstract}
-  An expansion of the title and contraction of the thesis.
+This project aims to create a Filter plugin for Fluent Bit that implements additive noise \acrlong{dp}. It achieves this aim by writing a Rust-based filter plugin that's compiled to a WASM target which Fluent Bit loads. Laplacian and Gaussian mechanisms to achieve $\epsilon$-differential privacy and $(\epsilon,\delta)$-differential privacy respectfully.
 \end{abstract}
 
 \begin{acknowledgements}
-  Much stuff borrowed from elsewhere
+I would like to acknowledge that Fluent Bit's Documentation around WASM support is reasonably exhaustive. I loosely based my filter plugin on the example Rust WASM plugin they host in their main repository. I very loosely adapted parts of their Dockerfile when writing the Fluent Bit build-stage in my own Dockerfile.
+
 \end{acknowledgements}
 
 \def\sfthing#1#2{\def#1{\mbox{{\small\normalfont\sffamily #2}}}}
@@ -25,26 +26,22 @@
 \sfthing{\PP}{P}
 \sfthing{\FF}{F}
 
+\printglossary[type=\acronymtype]
 \tableofcontents
 %\listoftables
 %\listoffigures
 
 \include{report/01-introduction}
 \include{report/02-background}
-\include{report/03-lit-review}
-% \include{design}
+\include{report/03-design}
 \include{report/04-implementation}
-\include{report/05-technologies}
-\include{report/06-future-work}
-% \include{evaluation}
+\include{report/05-evaluation}
+\include{report/06-conclusion}
 % \include{discussion}
-% \include{conclusion}
 
 \appendix
-%\begin{appendix}
 \include{report/A-user_man}
 \include{report/B-maintenance_man}
-%\end{appendix}
 
 \bibliography{report/bibliography}
 

@@ -1,5 +1,4 @@
-\chapter{Technologies Chosen\label{chap:{technologies}}}
-
+\chapter{Design\label{chap:design}}
 
 \section{Rust}
 \subsection{RV}
@@ -47,10 +46,8 @@ pub enum Distribution {
 
 This allows us to add additional features with a high degree of code reuse. You only need to add the relevant distribution-specific properties to the relevant \mintinline{rust}{enum Noise {...}} and any distribution-specific calculations to the \mintinline{rust}{match setting {...}} in \mintinline{rust}{fn process_setting_for_record}. 
 
-\subsection{Error handling}
-For this project, the anyhow package was chosen to 
-
 \subsection{rand}
+
 \subsection{serde}
 Serde is often considered one of the "core" crates is by far the most popular way to serialize and deserialize common text encoding formats to a Rust-native representation. The application uses serde both to manipulate the inputted JSON-encoded records and to deserialize the TOML-based settings files. The application uses several different strategies to make code reuse and extendability easier.
 \begin{minted}{rust}
@@ -128,6 +125,80 @@ unit = "int"
 \end{minted}
 Without \mintinline{rust}{#[serde(flatten)]}, OptionalSettings would be treated as a sub-entry in the TOML file. Do note however this will only flatten one level, so if a future need arises where it would be desirable to add sub-settings within OptionalSettings, that would treated as a TOML sub-entry (unless \mintinline{rust}{#[serde(flatten)]}) is specified for that separate entry again.
 
+\subsection{log}
+The log crate is a widely-used logging framework for Rust applications. It provides a standardized way to emit log messages at different levels of severity (e.g., debug, info, warn, error), allowing developers to control the verbosity of their application's output based on the environment or configuration.
+
+In our application, we use the log crate to emit warnings and errors when certain conditions are not met or when exceptions occur. For example, in the \mintinline{rust}{process_setting_for_record} function, if the record value cannot be converted to a float or if it's not numeric, we return an error using the \mintinline{rust}{Err} variant and log a warning message using \mintinline{rust}{warn!}:
+
+\begin{minted}{rust}
+match record_value {
+    Value::Number(n) => match n.as_f64() {
+        Some(n) => {
+            value = n;
+        }
+        None => return Err("Can't convert to a float".into()),
+    },
+    Value::String(s) => match s.parse::<f64>() {
+        Ok(n) => value = n,
+        Err(e) => {
+            return Err(e.into());
+        }
+    },
+    _ => {
+        return Err("Value not numeric".into());
+    }
+}
+\end{minted}
+
+Using the log crate allows us to easily integrate with various logging backends and configurations used by the host application (in this case, Fluent Bit). This makes it simple to capture and manage log messages emitted by our plugin without having to implement a custom logging solution.
+
+\subsection{std::collections::hash\_map}
+The \mintinline{rust}{std::collections::hash_map} module provides an implementation of a hash table, which allows efficient key-value pair lookups. In our application, we use a \mintinline{rust}{HashMap} to store the noise configuration settings loaded from the TOML files.
+
+Here's an example of how we use \mintinline{rust}{HashMap} in the \mintinline{rust}{load_configuration} function:
+
+\begin{minted}{rust}
+fn load_configuration(tag: &str) -> Result<HashMap<String, Noise>, Box<dyn Error>> {
+    let settings_file = format!("filters/{}.toml", tag);
+    let contents = fs::read_to_string(&settings_file)?;
+    let toml = toml::from_str::<HashMap<String, Noise>>(&contents)?;
+    Ok(toml)
+}
+\end{minted}
+
+We use \mintinline{rust}{toml::from_str} to parse the contents of the TOML file into a \mintinline{rust}{HashMap<String, Noise>}, where the keys are the record names and the values are the corresponding \mintinline{rust}{Noise} configurations. This allows us to efficiently look up the noise settings for a given record when processing the input data.
+
+\subsection{std::hash}
+The \mintinline{rust}{std::hash} module provides traits for hashing arbitrary values. In the filter plugin we use hashing to generate a deterministic seed for the random number generator when the \mintinline{rust}{rng_seed} optional setting is provided.
+
+Here's how we use the \mintinline{rust}{DefaultHasher} in the \mintinline{rust}{add_noise_to_value} function:
+
+\begin{minted}{rust}
+let mut rng: Box<dyn RngCore> = match &optional.rng_seed {
+        Some(seed) => {
+            let mut hasher = DefaultHasher::new();
+            seed.hash(&mut hasher);
+            let seed_hash = hasher.finish();
+            Box::new(StdRng::seed_from_u64(seed_hash))
+        }
+        None => Box::new(thread_rng()),
+    };
+\end{minted}
+
+If the \mintinline{rust}{rng_seed} is provided, we create a new \mintinline{rust}{DefaultHasher}, hash the seed value, and use the resulting hash as a seed for the \mintinline{rust}{StdRng} random number generator. This ensures that the generated noise is deterministic and reproducible when the same seed is used, which can be useful for testing and debugging purposes.
+
+\subsection{std::fs}
+The \mintinline{rust}{std::fs} module provides functionality for interacting with the file system. In our application, we use \mintinline{rust}{fs::read_to_string} to read the contents of the TOML configuration files.
+
+Here's an example from the \mintinline{rust}{load_configuration} function:
+
+\begin{minted}{rust}
+let settings_file = format!("filters/{}.toml", tag);
+let contents = fs::read_to_string(&settings_file)?;
+\end{minted}
+
+We construct the path to the TOML file based on the tag, and then use \mintinline{rust}{fs::read_to_string} to read the entire contents of the file into a \mintinline{rust}{String}. If the file doesn't exist or there's an error reading it, the function will return an error using the \mintinline{rust}{?} operator, which propagates the error to the caller.
+
 \section{Fluent Bit}
 Fluent Bit is a popular open-source data processor and log forwarder, which allows for the collection, processing, and shipping of log data and metrics to multiple destinations. It's designed to be lightweight and efficient, with a small memory footprint, making it suitable for high-performance environments such as cloud-based applications, IoT devices, and large-scale logging solutions. It focuses on receiving and interpreting events which may contain several key-value pair records, applying filters to said records, and routing them to a data sink. It's written in C and is designed to use few dependencies and supports a variety of targets including Linux, macOS, *BSD, and Windows. Fluent Bit is part of the Fluentd Ecosystem of products, which aims to simplify data collection and processing. It acts as a direct successor to the Ruby-written Fluentd, an alternative log and metric processor.
 
@@ -142,7 +213,43 @@ Fluent Bit's lightweight design, flexibility, and portability makes it a popular
 
 \section{WASM}
 The decision was taken early on to use Fluent Bit's built-in support for running Filter and Input plugins using WebAssembly. WebAssembly is a binary instruction format designed to allow running code from a large variety of compiled languages to run in a cross-architecture way at greater speed.\cite{Webassembly} Fluent Bit provides examples and officially supports the use of Go and Rust as Filter plugins.  
+\subsection{WebAssembly Micro Runtime (WAMR)}
+The \acrfull{wamr}\cite{wamr-about} is a Bytecode Alliance project that provides "a lightweight standalone WebAssembly (WASM) runtime with a small footprint, high performance, and highly configurable features for applications across from embedded, IoT, edge to Trusted Execution Environment (TEE), smart contract, cloud-native, and so on" \cite{wamr-docs}.
 
-\subsection{WAMR}
+WAMR aims to enable code reuse on the server side by allowing applications to run WASM programs. As stated in the documentation, it "supports multiple running modes to provide the ideal responsive time and performance on your demand" including interpreter mode, ahead-of-time (AOT) compilation mode, and just-in-time (JIT) compilation modes with support for LLVM JIT and Fast JIT \cite{wamr-docs}.
+
+The WAMR project consists of four key components:
+
+\begin{itemize}
+\item The iwasm VM core for executing WASM applications, supporting the different execution modes mentioned above. It offers high performance "nearly native speed by AOT and JIT modes" \cite{wamr-docs} while maintaining a small runtime size and low memory usage.
+
+\item The wamrc AOT compiler for compiling WASM files into optimized AOT files that can be run by the iwasm VM core to achieve the best performance and smallest runtime footprint. This is integrated into the Dockerfile build system provided for evaluation. Using AOT roughly halves the executable blob. More details in 
+
+\item An application framework that "supports remote application management from the host environment or the cloud through any physical communications" and has a modular design for different managed runtimes \cite{wamr-docs}.
+
+\item An application manager providing "a comprehensive framework for programming WASM applications for device and IoT usages" based on an event-driven model, including APIs for timers, inter-app communication, sensors, connectivity, data transmission, and 2D graphics \cite{wamr-docs}.
+
+\end{itemize}
+
+WAMR supports a wide range of architectures like x86, ARM, RISC-V, and others, as well as platforms like Linux, Windows, various real-time operating systems, and more. It also has security features through Intel SGX (Software Guard Extensions) support for application isolation.
+
+\subsection{WebAssembly System Interface (WASI)}
+The WebAssembly System Interface (WASI) is a modular system interface that defines a set of standard APIs for Wasm modules to interact with the host system. WASI provides a consistent and portable way for Wasm applications to access system resources and perform operations such as file I/O, networking, and more, without relying on platform-specific APIs.
+
+\subsection{wamrc}
+wamrc is a command-line tool for compiling and running Wasm applications using the WAMR runtime environment.
+
+\subsection{Rust and Wasm32-wasi Target}
+Rust is a systems programming language that has excellent support for generating Wasm binaries through its wasm32-wasi target. This target allows Rust code to be compiled into Wasm modules that can be executed in WASI-compliant runtimes like WAMR.
+
+\begin{minted}{rust}
+
+\end{minted}
+
+This function can then be compiled to Wasm and executed using WAMR or any other WASI-compliant runtime.
+
+\subsection{Fluent Bit and Wasm Filter Plugins}
+Fluent Bit is a lightweight log processor and forwarder that supports extending its functionality through plugins written in various languages, including Wasm. By leveraging Wasm, Fluent Bit can execute filter plugins written in languages like Rust, C, or Go in a secure and sandboxed environment, enabling efficient and cross-platform data processing.
+
 \section{OCI}
 The decision to go with a Dockerfile 
