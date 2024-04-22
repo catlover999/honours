@@ -1,5 +1,5 @@
 # Build arguments
-ARG wasm_optimization=wasm
+ARG wasm_optimization=aot
 ARG rust_profile=release
 ARG fluent_bit_version=v3.0.2
 
@@ -20,8 +20,6 @@ RUN if [ "${rust_profile}" != "debug" ]; then \
 FROM debian:bookworm-slim as fluent
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 \
-    python3-pandas \
     build-essential \
     libcurl4-openssl-dev \
     curl \
@@ -35,8 +33,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     libsystemd-dev \
     zlib1g-dev \
-    libpq-dev \
-    postgresql-server-dev-all \
     flex \
     bison \
     libyaml-dev \
@@ -65,9 +61,7 @@ RUN bin/flb-wamrc -o filter_dp.aot filter_dp.wasm
 RUN sed -i 's/WASM_Path filter_dp.wasm/WASM_Path filter_dp.aot/g' fluent-bit.conf
 
 FROM fluent-${wasm_optimization} as fluent-runner
-RUN mkdir output && \
-    echo 'time,Department,Department_Name,Division,Gender,Base_Salary,Overtime_Pay,Longevity_Pay,Grade' > output/EmployeeSalaries.perturbed.csv && \
-    echo 'time,gender,race_ethnicity,parental_education,lunch,test_preparation,math_score,reading_score,writing_score' > output/StudentsPerformance.perturbed.csv
+RUN mkdir output
 COPY input input
 RUN split -d -l 200 --additional-suffix=.csv input/EmployeeSalaries.csv input/EmployeeSalaries_ && \
     split -d -l 200 --additional-suffix=.csv input/StudentsPerformance.csv input/StudentsPerformance_
@@ -84,8 +78,6 @@ RUN bin/fluent-bit -c fluent-bit.conf | { \
 # 3. Evaualtion stage
 FROM docker.io/jupyter/scipy-notebook:latest
 COPY project.ipynb requirements.txt ./
-ENV NOTEBOOK_NAME="project.ipynb"
 RUN pip install --no-cache-dir -r requirements.txt
 COPY input input
 COPY --from=fluent-runner /fluent-bit/output/ output
-#CMD ["start-notebook.sh", "--NotebookApp.default_url=/notebooks/project.ipynb"]
