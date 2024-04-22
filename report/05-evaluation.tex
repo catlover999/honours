@@ -1,0 +1,17 @@
+\chapter{Evaluation\label{chap:evaluation}}
+\section{Experimental Design}
+To evaluate the Rust plugin, we utilized a sample dataset consisting of two CSV files: "EmployeeSalaries.csv" and "StudentsPerformance.csv". The "EmployeeSalaries.csv" file contains information about employee salaries, including attributes such as department, gender, base salary, and overtime pay. The "StudentsPerformance.csv" file contains data related to student performance, including attributes like gender, race/ethnicity, parental education, and test scores.
+The experimental setup involved the following steps:
+
+\begin{enumerate}
+\item The sample dataset files were split into smaller chunks to simulate a streaming data scenario. Each file was divided into subfiles containing 200 records each.
+\item The Rust plugin was configured with specific differential privacy settings for each attribute. For the \texttt{"Base\_Salary"} attribute in the "EmployeeSalaries.csv" file, Gaussian noise with an epsilon value of 1.0 and a sensitivity of 10 was applied. For the \texttt{"math\_score"} \texttt{"reading\_score"}, and \texttt{"writing\_score"} attributes in the \texttt{"StudentsPerformance.csv"} file, Laplace noise was used with different epsilon values and sensitivities.
+\item Fluent Bit, a lightweight data processor, was used to process the data streams. The Rust plugin was integrated into Fluent Bit as a filter, allowing for the application of differential privacy mechanisms to the data in real-time.
+\item The perturbed datasets were stored in separate output files, "EmployeeSalaries.perturbed.csv" and "StudentsPerformance.perturbed.csv", for further analysis.
+\end{enumerate}
+\subsection{Test Environment}
+The test environment was constructed with a multi-build context Docker container. The first two stages concerned themselves with building the filter plugin along with Fluent Bit with a non-default build option (only needed if \acrshort{aot} is to be built).
+\subsection{Experimental Setup}
+\section{Results}
+\section{Analysis}
+\section{Interpretation of Results}

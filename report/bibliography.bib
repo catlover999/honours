@@ -4,11 +4,11 @@
 	journal      = {GitHub},
 	url          = {https://github.com/kenriortega/flb_filter_iis}
 }
-@article{Dwork2013,
+@inproceedings{Dwork2014,
 	title        = {The Algorithmic Foundations of Differential Privacy},
 	author       = {Dwork,  Cynthia and Roth,  Aaron},
-	year         = 2013,
-	journal      = {Foundations and Trends{\textregistered} in Theoretical Computer Science},
+	year         = 2014,
+	booktitle    = {Foundations and Trends{\textregistered} in Theoretical Computer Science},
 	publisher    = {Now Publishers},
 	volume       = 9,
 	number       = {3–4},
@@ -34,10 +34,12 @@
 	year         = 2019,
 	url          = {https://api.semanticscholar.org/CorpusID:198976455}
 }
-@misc{WhatisDifferentialPrivacy,
+@article{WhatisDifferentialPrivacy,
 	url          = {https://www.statice.ai/post/what-is-differential-privacy-definition-mechanisms-examples},
 	abstractnote = {Discover differential privacy, a technique to protect privacy in datasets while allowing for data analysis. Explore mechanisms, uses in machine learning and synthetic data, and how enterprise use it.},
-	language     = {en}
+	language     = {en},
+    year         = {2022},
+    author       = {Elise Devaux}
 }
 @misc{Maranon,
 	title        = {What Differential Privacy Is and Why Google and Apple Are Using It with Your Data},
@@ -53,7 +55,7 @@
 	year         = 2020,
 	month        = may,
 	url          = {https://learn.microsoft.com/en-us/shows/ai-show/differential-privacy-in-practice-at-microsoft-windows},
-	abstractnote = {Learn how we use differential privacy to protect users’ data in Windows.Learn More: Azure Blog Responsible MLAzure ML The AI Show’s Favorite links:Don’t miss new episodes, subscribe to the AI Show  Create a Free account (Azure) Please note that we are renaming the toolkit and will be introducing the new name in the coming weeks.},
+	abstractnote = {Learn how we use differential privacy to protect users’ data in Windows},
 	language     = {en-us}
 }
 @misc{What-is-Fluent-Bit,
@@ -107,38 +109,110 @@
 	journal      = {Google for Developers},
 	url          = {https://developers.googleblog.com/2022/01/expanding-access-to-differential-privacy.html}
 }
-@misc{Google_BigQuery, url={https://cloud.google.com/bigquery/docs/differential-privacy}, journal={Google}, publisher={Google}} 
-
-@misc{Webassembly, url={https://webassembly.org/}, journal={Webassembly}} 
-
-@inbook{Dwork2006,
-  title = {Calibrating Noise to Sensitivity in Private Data Analysis},
-  ISBN = {9783540327325},
-  ISSN = {1611-3349},
-  url = {http://dx.doi.org/10.1007/11681878_14},
-  DOI = {10.1007/11681878_14},
-  booktitle = {Lecture Notes in Computer Science},
-  publisher = {Springer Berlin Heidelberg},
-  author = {Dwork,  Cynthia and McSherry,  Frank and Nissim,  Kobbi and Smith,  Adam},
-  year = {2006},
-  pages = {265–284}
+@misc{Google_BigQuery,
+	journal      = {Google},
+	publisher    = {Google},
+	url          = {https://cloud.google.com/bigquery/docs/differential-privacy}
 }
-
+@misc{Webassembly,
+	journal      = {Webassembly},
+	url          = {https://webassembly.org/}
+}
+@inbook{Dwork2006calibrating,
+	title        = {Calibrating Noise to Sensitivity in Private Data Analysis},
+	author       = {Dwork,  Cynthia and McSherry,  Frank and Nissim,  Kobbi and Smith,  Adam},
+	year         = 2006,
+	booktitle    = {Lecture Notes in Computer Science},
+	publisher    = {Springer Berlin Heidelberg},
+	pages        = {265–284},
+	doi          = {10.1007/11681878_14},
+	isbn         = 9783540327325,
+	issn         = {1611-3349},
+	url          = {http://dx.doi.org/10.1007/11681878_14}
+}
+@inbook{Dwork2006dp,
+	title        = {Differential Privacy},
+	author       = {Dwork,  Cynthia},
+	year         = 2006,
+	booktitle    = {Lecture Notes in Computer Science},
+	publisher    = {Springer Berlin Heidelberg},
+	pages        = {1–12},
+	doi          = {10.1007/11787006_1},
+	isbn         = 9783540359081,
+	issn         = {1611-3349},
+	url          = {http://dx.doi.org/10.1007/11787006_1}
+}
 @inproceedings{McSherry2007,
-  title = {Mechanism Design via Differential Privacy},
-  url = {http://dx.doi.org/10.1109/FOCS.2007.66},
-  DOI = {10.1109/focs.2007.66},
-  booktitle = {48th Annual IEEE Symposium on Foundations of Computer Science (FOCS’07)},
-  publisher = {IEEE},
-  author = {McSherry,  Frank and Talwar,  Kunal},
-  year = {2007},
-  month = oct 
+	title        = {Mechanism Design via Differential Privacy},
+	author       = {McSherry,  Frank and Talwar,  Kunal},
+	year         = 2007,
+	month        = oct,
+	booktitle    = {48th Annual IEEE Symposium on Foundations of Computer Science (FOCS’07)},
+	publisher    = {IEEE},
+	doi          = {10.1109/focs.2007.66},
+	url          = {http://dx.doi.org/10.1109/FOCS.2007.66}
 }
 @misc{kasiviswanathan2010learn,
-      title={What Can We Learn Privately?}, 
-      author={Shiva Prasad Kasiviswanathan and Homin K. Lee and Kobbi Nissim and Sofya Raskhodnikova and Adam Smith},
-      year={2010},
-      eprint={0803.0924},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG}
+	title        = {What Can We Learn Privately?},
+	author       = {Shiva Prasad Kasiviswanathan and Homin K. Lee and Kobbi Nissim and Sofya Raskhodnikova and Adam Smith},
+	year         = 2010,
+	eprint       = {0803.0924},
+	archiveprefix = {arXiv},
+	primaryclass = {cs.LG}
 }
+@misc{wilson2019differentially,
+	title        = {Differentially Private SQL with Bounded User Contribution},
+	author       = {Royce J Wilson and Celia Yuxin Zhang and William Lam and Damien Desfontaines and Daniel Simmons-Marengo and Bryant Gipson},
+	year         = 2019,
+	eprint       = {1909.01917},
+	archiveprefix = {arXiv},
+	primaryclass = {cs.CR}
+}
+@inproceedings{wilson2020differentially,
+	title        = {Differentially Private SQL with Bounded User Contribution},
+	author       = {Royce Wilson and Celia Yuxin Zhang and William Lam and Damien Desfontaines and Daniel Simmons-Marengo and Bryant Gipson},
+	year         = 2020
+}
+@misc{tang2017privacy,
+	title        = {Privacy Loss in Apple's Implementation of Differential Privacy on MacOS 10.12},
+	author       = {Jun Tang and Aleksandra Korolova and Xiaolong Bai and Xueqiang Wang and Xiaofeng Wang},
+	year         = 2017,
+	eprint       = {1709.02753},
+	archiveprefix = {arXiv},
+	primaryclass = {cs.CR}
+}
+@techreport{AppleDifferentialPrivacy2017,
+	title        = {Differential Privacy Overview},
+	author       = {Apple Inc.},
+	year         = 2017,
+	url          = {https://www.apple.com/privacy/docs/Differential_Privacy_Overview.pdf},
+	institution  = {Apple Inc.}
+}
+@article{Gong2022Harnessing,
+	title        = {Harnessing the {Known} {Unknowns}: Differential {Privacy} and the 2020 {Census}},
+	author       = {Gong, Ruobin and Groshen, Erica L. and Vadhan, Salil},
+	year         = 2022,
+	month        = {jun 24},
+	journal      = {Harvard Data Science Review},
+	publisher    = {},
+	number       = {Special Issue 2},
+	note         = {https://hdsr.mitpress.mit.edu/pub/fgyf5cne}
+}
+@presentation{opendp2020,
+	title        = {A programming framework for OpenDP},
+	author       = {Michael Hay and Marco Gaboardi and Salil Vadhan},
+	year         = 2020,
+	journal      = {6th Workshop on the Theory and Practice of Differential Privacy (TPDP 2020)},
+	url          = {https://projects.iq.harvard.edu/files/opendp/files/opendp_programming_framework_11may2020_1_01.pdf}
+}
+@misc{holohan2019diffprivlib,
+	title        = {Diffprivlib: The IBM Differential Privacy Library},
+	author       = {Naoise Holohan and Stefano Braghin and Pól Mac Aonghusa and Killian Levacher},
+	year         = 2019,
+	eprint       = {1907.02444},
+	archiveprefix = {arXiv},
+	primaryclass = {cs.CR}
+}
+@misc{wamr-about, url={https://wamr.gitbook.io/document/basics/introduction/wamr_project}, journal={WAMR Project}, publisher={Bytecode Alliance}} 
+@misc{wamr-docs, url={https://wamr.gitbook.io/document}, journal={WAMR Document Home Page}, publisher={Bytecode Alliance}} 
+@misc{Hess_2023, title={Regular expressions and ONIGMO, the Ruby Regular Expression Engine}, url={https://hparker.svbtle.com/regular-expressions-and-onigmo}, journal={Svbtle}, author={Hess, Adam}, year={2023}, month={Apr}} 

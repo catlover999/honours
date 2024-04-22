@@ -405,7 +405,7 @@
     \textbf{\@degree@string} \\
     of the \\
     \textbf{University of Aberdeen}.\\[2em]
-    \includegraphics[width=2cm]{report/abdnshield.pdf}
+    \includegraphics[width=2cm]{report/media/abdnshield.pdf}
     \end{center}%
     \vspace{4em}%
     \begin{center}%

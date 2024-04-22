@@ -1,0 +1,29 @@
+\makeglossaries
+\newacronym{dp}{DP}{Differential Privacy}
+\newacronym{wasm}{WASM}{WebAssembly}
+\newacronym{wamr}{WAMR}{WebAssembly Micro Runtime}
+\newacronym{fb}{FB}{Fluent Bit}
+\newacronym{ipynb}{ipynb}{Interactive Python Notebook}
+\newacronym{oci}{OCI}{Open Container Initiative}
+\newacronym{aot}{AoT}{Ahead-of-time compilation}
+\newacronym{csv}{CSV}{Comma-separated values}
+\newacronym{regex}{Regex}{Regular expression}
+
+\newglossaryentry{rv}{
+    name=rv,
+    description={Rust crate which provides random variables for probabilistic modelling}
+}
+
+\newglossaryentry{record}{
+    name=record,
+    description={In Fluent bit, a record is specifically referring to a key-value pair. An event can be made up of 1 or more records}
+}
+\newglossaryentry{event}{
+    name=event,
+    description={In Fluent bit, an event is a set of key-value pairs with an associated timestamp and tag. Events are routed according to Fluent Bit's configured internal dataflow graph}
+}
+
+\newglossaryentry{tag}{
+    name=tag,
+    description={In Fluent bit, a tag is associated with every event and can be set or matched through Wildcard or Regex patterns. Tags serve as the primary means to route events within Fluent Bit}
+}
