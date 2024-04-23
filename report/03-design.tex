@@ -4,11 +4,9 @@
 \subsection{RV}
 RV is a Rust crate for probabilistic modeling which was chosen for it's ability to cover a wide variety of distributions. Intial attempts were made to use the OpenDP library for this purpose, however after initial hurdles of getting the package to compile for the WASM/WASI environment were overcome (with a feature flag to disable the optional dependency on OpenSSL, which doesn't have an upstream port for WASM) it was found that the documented "Measurements" module was seemingly not present in the crate. OpenDP has a wide purview of wishing to support many different differential privacy algorithms, not only for the use case of making differentially private queries on a dataset but also concerns itself on making measures and transformations on entire datasets. This added level of feature complexity isn't required for our use case, with the dual limitations imposed on us by using Local (in contrast to Global) Differential Privacy and with maintaining state across WASM function invocations.   
 
-What RV provides us is a way to create distributions and to make a random draw on said distribution, no more. Currently the Laplace and Gaussian distributions are supported by the application, however the program is structured in such a way to make it trivial to use any of RV's supported Distributions. The \mintinline{rust}{fn add_noise_to_value()} function is Distribution agnostic, taking any distribution defined by RV's enum of all supported distributions.
-\begin{listing}[!ht]
-\caption{Enum from rv::dist::distribution}
-\label{code:rv}
-\begin{minted}[mathescape]{rust}
+What RV provides us is a way to create distributions and to make a random draw on said distribution, no more. Currently the Laplace and Gaussian distributions are supported by the application, however the program is structured in such a way to make it trivial to use any of RV's supported Distributions. The \texttt{fn add\_noise\_to\_value()} function is Distribution agnostic, taking any distribution defined by RV's enum of all supported distributions.
+
+\begin{lstlisting}[language=Rust, caption={Enum from rv::dist::distribution}]
 pub enum Distribution {
     Bernoulli(super::Bernoulli),
     Beta(super::Beta),
@@ -41,15 +39,15 @@ pub enum Distribution {
     Uniform(super::Uniform),
     VonMises(super::VonMises),
 }
-\end{minted}
-\end{listing}
+\end{lstlisting}
 
-This allows us to add additional features with a high degree of code reuse. You only need to add the relevant distribution-specific properties to the relevant \mintinline{rust}{enum Noise {...}} and any distribution-specific calculations to the \mintinline{rust}{match setting {...}} in \mintinline{rust}{fn process_setting_for_record}. 
+This allows us to add additional features with a high degree of code reuse. You only need to add the relevant distribution-specific properties to the relevant \texttt{enum Noise {...}} and any distribution-specific calculations to the \texttt{match setting {...}} in \texttt{fn process\_setting\_for\_record}. 
 
 \subsection{rand}
 
 \subsection{serde}
 Serde is often considered one of the "core" crates is by far the most popular way to serialize and deserialize common text encoding formats to a Rust-native representation. The application uses serde both to manipulate the inputted JSON-encoded records and to deserialize the TOML-based settings files. The application uses several different strategies to make code reuse and extendability easier.
+\lstinputlisting[language=Rust, firstline=213, lastline=234, caption={Noise Settings}]{filter_dp/src/lib.rs}
 \begin{minted}{rust}
 #[derive(Deserialize)]
 #[serde(tag = "type")]
@@ -73,7 +71,7 @@ enum Noise {
     },
 }
 \end{minted}
-The above \mintinline{rust}{enum} defines the distribution-specific settings associated with each distribution type. It derives the \mintinline{rust}{Deserialize} trait from the \mintinline{rust}{serde} crate. It uses serde's internal tagging feature, \mintinline{rust}{#[serde(tag = "type")]}, to use one of the struct's name's in the enum as a field labelled "type" in a TOML file. To elaborate what this equates to, this is an example TOML file that would be matched by the deserializer.
+The above \texttt{enum} defines the distribution-specific settings associated with each distribution type. It derives the \texttt{Deserialize} trait from the \texttt{serde} crate. It uses serde's internal tagging feature, \texttt{\#[serde(tag = "type")]}, to use one of the struct's name's in the enum as a field labelled "type" in a TOML file. To elaborate what this equates to, this is an example TOML file that would be matched by the deserializer.
 \begin{minted}{toml}
 [example_record]
 type = "Laplace"
@@ -87,91 +85,42 @@ delta = 5
 \end{minted}
 In the case of an incomplete or otherwise corrupt setting, a message is sent to Anyhow (to be captured by the relevant logging infrastructure in use) if an invalid setting is given. If no such setting exists for a record, then that record is skipped from the noise addition process and is passed back to Fluent Bit without modification. 
 
-\begin{minted}{rust}
-fn default_mu() -> f64 {
-    0.0
-}
-#[derive(Deserialize)]
-struct OptionalSettings {
-    rng_seed: Option<String>,
-    #[serde(default = "Units::default_unit")]
-    unit: Units,
-}
+\lstinputlisting[language=Rust, firstline=236, lastline=258, caption={Default value setters}]{filter_dp/src/lib.rs}
 
-#[derive(Deserialize)]
-#[allow(non_camel_case_types)]
-enum Units {
-    int,
-    float,
-}
+The above shows the current behaviour regarding default values. Although a bit verbose, it makes sure that the compiler and Serde know what's going on to store items in memory optimally. The default\_mu() and default\_unit() functions should be optimized out by the compiler with inlining and constant propagation. Using an enum for Units allows greater flexibility when specifying new types, as you just need to add the desired value to the enum before adding specific handling code in the match statement in \texttt{fn add\_noise\_to\_value}.
 
-impl Units {
-    fn default_unit() -> Self {
-        Units::float
-    }
-}
-\end{minted}
-The above shows the current behaviour regarding default values. Although a bit verbose, it makes sure that the compiler and Serde know what's going on to store items in memory optimally. The default\_mu() and default\_unit() functions should be optimized out by the compiler with inlining and constant propagation. Using an enum for Units allows greater flexibility when specifying new types, as you just need to add the desired value to the enum before adding specific handling code in the match statement in \mintinline{rust}{fn add_noise_to_value}.
+Using a struct for OptionalSettings has significantly reduced code duplication and vastly simplified the process of adding additional settings as the individual distribution code can pass a generic OptionalSettings variable to \texttt{fn add\_noise\_to\_value}, meaning that you can add additional settings and setting handling code with the result being applied to every distribution you implement. With the use of Serde JSON's \texttt{\#[serde(flatten)]} container attribute, all values contained within OptionalSettings are tried as if they were on the same level as the variables contained within the parent struct. For example:
 
-Using a struct for OptionalSettings has significantly reduced code duplication and vastly simplified the process of adding additional settings as the individual distribution code can pass a generic OptionalSettings variable to \mintinline{rust}{fn add_noise_to_value}, meaning that you can add additional settings and setting handling code with the result being applied to every distribution you implement. With the use of Serde JSON's \mintinline{rust}{#[serde(flatten)]} container attribute, all values contained within OptionalSettings are tried as if they were on the same level as the variables contained within the parent struct. For example:
-
-\begin{minted}{toml}
+\begin{lstlisting}[language=TOML, caption={Test}]
 [example_optional]
 type = "Laplace"
 sensitivity = 4.2
 epsilon = 0.9
 rng_seed = "Differential Privacy!"
 unit = "int"
-\end{minted}
-Without \mintinline{rust}{#[serde(flatten)]}, OptionalSettings would be treated as a sub-entry in the TOML file. Do note however this will only flatten one level, so if a future need arises where it would be desirable to add sub-settings within OptionalSettings, that would treated as a TOML sub-entry (unless \mintinline{rust}{#[serde(flatten)]}) is specified for that separate entry again.
+\end{lstlisting}
+Without \texttt{\#[serde(flatten)]}, OptionalSettings would be treated as a sub-entry in the TOML file. Do note however this will only flatten one level, so if a future need arises where it would be desirable to add sub-settings within OptionalSettings, that would treated as a TOML sub-entry (unless \texttt{\#[serde(flatten)]}) is specified for that separate entry again.
 
 \subsection{log}
 The log crate is a widely-used logging framework for Rust applications. It provides a standardized way to emit log messages at different levels of severity (e.g., debug, info, warn, error), allowing developers to control the verbosity of their application's output based on the environment or configuration.
 
-In our application, we use the log crate to emit warnings and errors when certain conditions are not met or when exceptions occur. For example, in the \mintinline{rust}{process_setting_for_record} function, if the record value cannot be converted to a float or if it's not numeric, we return an error using the \mintinline{rust}{Err} variant and log a warning message using \mintinline{rust}{warn!}:
-
-\begin{minted}{rust}
-match record_value {
-    Value::Number(n) => match n.as_f64() {
-        Some(n) => {
-            value = n;
-        }
-        None => return Err("Can't convert to a float".into()),
-    },
-    Value::String(s) => match s.parse::<f64>() {
-        Ok(n) => value = n,
-        Err(e) => {
-            return Err(e.into());
-        }
-    },
-    _ => {
-        return Err("Value not numeric".into());
-    }
-}
-\end{minted}
+In our application, we use the log crate to emit warnings and errors when certain conditions are not met or when exceptions occur. For example, in the \texttt{process\_setting\_for\_record} function, if the record value cannot be converted to a float or if it's not numeric, we return an error using the \texttt{Err} variant and log a warning message using \texttt{warn!}.
 
 Using the log crate allows us to easily integrate with various logging backends and configurations used by the host application (in this case, Fluent Bit). This makes it simple to capture and manage log messages emitted by our plugin without having to implement a custom logging solution.
 
 \subsection{std::collections::hash\_map}
-The \mintinline{rust}{std::collections::hash_map} module provides an implementation of a hash table, which allows efficient key-value pair lookups. In our application, we use a \mintinline{rust}{HashMap} to store the noise configuration settings loaded from the TOML files.
+The \texttt{std::collections::hash\_map} module provides an implementation of a hash table, which allows efficient key-value pair lookups. In our application, we use a \texttt{HashMap} to store the noise configuration settings loaded from the TOML files.
 
-Here's an example of how we use \mintinline{rust}{HashMap} in the \mintinline{rust}{load_configuration} function:
+Here's an example of how we use \texttt{HashMap} in the \texttt{load\_configuration} function:
 
-\begin{minted}{rust}
-fn load_configuration(tag: &str) -> Result<HashMap<String, Noise>, Box<dyn Error>> {
-    let settings_file = format!("filters/{}.toml", tag);
-    let contents = fs::read_to_string(&settings_file)?;
-    let toml = toml::from_str::<HashMap<String, Noise>>(&contents)?;
-    Ok(toml)
-}
-\end{minted}
+\lstinputlisting[language=Rust, firstline=102, lastline=107, caption={Hashmap example}]{filter_dp/src/lib.rs}
 
-We use \mintinline{rust}{toml::from_str} to parse the contents of the TOML file into a \mintinline{rust}{HashMap<String, Noise>}, where the keys are the record names and the values are the corresponding \mintinline{rust}{Noise} configurations. This allows us to efficiently look up the noise settings for a given record when processing the input data.
+We use \texttt{toml::from\_str} to parse the contents of the TOML file into a \texttt{HashMap<String, Noise>}, where the keys are the record names and the values are the corresponding \texttt{Noise} configurations. This allows us to efficiently look up the noise settings for a given record when processing the input data.
 
 \subsection{std::hash}
-The \mintinline{rust}{std::hash} module provides traits for hashing arbitrary values. In the filter plugin we use hashing to generate a deterministic seed for the random number generator when the \mintinline{rust}{rng_seed} optional setting is provided.
+The \texttt{std::hash} module provides traits for hashing arbitrary values. In the filter plugin we use hashing to generate a deterministic seed for the random number generator when the \texttt{rng\_seed} optional setting is provided.
 
-Here's how we use the \mintinline{rust}{DefaultHasher} in the \mintinline{rust}{add_noise_to_value} function:
+Here's how we use the \lstinline|DefaultHasher| in the \texttt{add\_noise\_to\_value} function:
 
 \begin{minted}{rust}
 let mut rng: Box<dyn RngCore> = match &optional.rng_seed {
@@ -184,20 +133,21 @@ let mut rng: Box<dyn RngCore> = match &optional.rng_seed {
         None => Box::new(thread_rng()),
     };
 \end{minted}
+\lstinputlisting[language=Rust, firstline=191, lastline=199, caption={RNG with DefaultHasher}]{filter_dp/src/lib.rs}
 
-If the \mintinline{rust}{rng_seed} is provided, we create a new \mintinline{rust}{DefaultHasher}, hash the seed value, and use the resulting hash as a seed for the \mintinline{rust}{StdRng} random number generator. This ensures that the generated noise is deterministic and reproducible when the same seed is used, which can be useful for testing and debugging purposes.
+If the \texttt{rng\_seed} is provided, we create a new \texttt{DefaultHasher}, hash the seed value, and use the resulting hash as a seed for the \texttt{StdRng} random number generator. This ensures that the generated noise is deterministic and reproducible when the same seed is used, which can be useful for testing and debugging purposes.
 
 \subsection{std::fs}
-The \mintinline{rust}{std::fs} module provides functionality for interacting with the file system. In our application, we use \mintinline{rust}{fs::read_to_string} to read the contents of the TOML configuration files.
+The \texttt{std::fs} module provides functionality for interacting with the file system. In our application, we use \texttt{fs::read\_to\_string} to read the contents of the TOML configuration files.
 
-Here's an example from the \mintinline{rust}{load_configuration} function:
+Here's an example from the \texttt{load\_configuration} function:
 
 \begin{minted}{rust}
 let settings_file = format!("filters/{}.toml", tag);
 let contents = fs::read_to_string(&settings_file)?;
 \end{minted}
 
-We construct the path to the TOML file based on the tag, and then use \mintinline{rust}{fs::read_to_string} to read the entire contents of the file into a \mintinline{rust}{String}. If the file doesn't exist or there's an error reading it, the function will return an error using the \mintinline{rust}{?} operator, which propagates the error to the caller.
+We construct the path to the TOML file based on the tag, and then use \texttt{fs::read\_to\_string} to read the entire contents of the file into a \texttt{String}. If the file doesn't exist or there's an error reading it, the function will return an error using the \texttt{?} operator, which propagates the error to the caller.
 
 \section{Fluent Bit}
 Fluent Bit is a popular open-source data processor and log forwarder, which allows for the collection, processing, and shipping of log data and metrics to multiple destinations. It's designed to be lightweight and efficient, with a small memory footprint, making it suitable for high-performance environments such as cloud-based applications, IoT devices, and large-scale logging solutions. It focuses on receiving and interpreting events which may contain several key-value pair records, applying filters to said records, and routing them to a data sink. It's written in C and is designed to use few dependencies and supports a variety of targets including Linux, macOS, *BSD, and Windows. Fluent Bit is part of the Fluentd Ecosystem of products, which aims to simplify data collection and processing. It acts as a direct successor to the Ruby-written Fluentd, an alternative log and metric processor.

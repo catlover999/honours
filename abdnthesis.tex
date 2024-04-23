@@ -1,4 +1,6 @@
-\input{report/00-preamble}
+\documentclass[bsc]{report/media/abdnthesis}
+
+\usepackage{report/00-preamble}
 
 \title{Integrating Differential Privacy into Fluent Bit}
 \author{Julien Leo Acker}
@@ -30,6 +32,7 @@ I would like to acknowledge that Fluent Bit's Documentation around WASM support 
 \tableofcontents
 %\listoftables
 %\listoffigures
+\lstlistoflistings{}
 
 \include{report/01-introduction}
 \include{report/02-background}
@@ -42,6 +45,7 @@ I would like to acknowledge that Fluent Bit's Documentation around WASM support 
 \appendix
 \include{report/A-user_man}
 \include{report/B-maintenance_man}
+\include{report/C-code_listings}
 
 \bibliography{report/bibliography}
 
