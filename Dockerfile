@@ -52,13 +52,13 @@ RUN cmake -DFLB_WAMRC=On .. && \
 
 FROM fluent as fluent-wasm
 WORKDIR /fluent-bit
-COPY fluent-bit.conf .
+COPY fluent-bit.yaml .
 ARG rust_profile
 COPY --from=builder /filter_dp/target/wasm32-wasi/$rust_profile/filter_dp.wasm .
 
 FROM fluent-wasm as fluent-aot
 RUN bin/flb-wamrc -o filter_dp.aot filter_dp.wasm
-RUN sed -i 's/WASM_Path filter_dp.wasm/WASM_Path filter_dp.aot/g' fluent-bit.conf
+RUN sed -i 's/wasm_path: filter_dp.wasm/wasm_path: filter_dp.aot/' fluent-bit.yaml
 
 FROM fluent-${wasm_optimization} as fluent-runner
 RUN mkdir output
@@ -68,7 +68,7 @@ RUN split -d -l 200 --additional-suffix=.csv input/EmployeeSalaries.csv input/Em
 COPY filters filters
 COPY parsers.conf .
 ARG wasm_optimization
-RUN bin/fluent-bit -c fluent-bit.conf | { \
+RUN bin/fluent-bit -c fluent-bit.yaml | { \
     grep -m 1 "Quit" && \
     sleep 5; \
     pkill -SIGTERM fluent-bit; \
