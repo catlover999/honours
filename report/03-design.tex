@@ -1,12 +1,61 @@
 \chapter{Design\label{chap:design}}
+\section{Differential Privacy Design}
+Differential Privacy (DP) is a mathematical framework for protecting individual privacy in datasets while allowing statistical analysis. It achieves this by adding carefully calibrated noise to the data or query results. The amount of noise added depends on the \textit{sensitivity} of the query function (how much the output can change by modifying a single record) and the desired level of privacy, quantified by the \textit{privacy budget} $\epsilon$. 
 
+This project implements two key mechanisms for achieving differential privacy: the Laplace Mechanism for $\epsilon$-DP and the Gaussian Mechanism for $(\epsilon, \delta)$-DP. The following subsections detail these mechanisms and their underlying probability distributions.
+
+\subsection{Laplace Mechanism}
+The Laplace Mechanism achieves $\epsilon$-differential privacy by adding noise drawn from the Laplace distribution to the output of a function $f$. The scale parameter $b$ of the distribution is set to $\Delta f / \epsilon$, where $\Delta f$ is the $L_1$ sensitivity of $f$, defined as the maximum change in $f$'s output that can result from modifying a single record.
+
+\begin{definition}[Laplace Mechanism]
+Given any function $f: \mathbb{N}^{|\mathcal{X}|} \rightarrow \mathbb{R}^k$, the Laplace Mechanism is defined as:
+\begin{equation}
+\mathcal{M}_L(x, f, \epsilon) = f(x) + (Y_1, \ldots, Y_k)
+\end{equation}
+where $Y_i$ are independent and identically distributed random variables drawn from $Lap(\Delta f/\epsilon)$, the Laplace distribution with scale $b = \Delta f/\epsilon$\citep[Def. 3.3]{Dwork2014}.
+\end{definition}
+
+The Laplace distribution has probability density function:
+\begin{equation}
+Lap(x | b) = \frac{1}{2b} \exp\left(-\frac{|x|}{b}\right) 
+\end{equation}
+Its mean is 0 and variance is $2b^2$\citep[Def. 3.2]{Dwork2014}. The Laplace Mechanism is implemented in this project using the \texttt{rv::dist::Laplace} distribution, with $\epsilon$ and sensitivity provided via configuration files.
+
+\subsection{Gaussian Mechanism}
+The Gaussian Mechanism relaxes $\epsilon$-DP to $(\epsilon,\delta)$-DP, where $\delta$ allows a small probability of violating strict $\epsilon$-DP. It adds Gaussian noise scaled to the $L_2$ sensitivity $\Delta_2 f$ and privacy parameters $\epsilon, \delta$.
+
+\begin{definition}[Gaussian Mechanism]
+Given any function $f: \mathbb{N}^{|\mathcal{X}|} \rightarrow \mathbb{R}^k$, the Gaussian Mechanism is defined as: 
+\begin{equation}
+\mathcal{M}_G(x, f, \epsilon, \delta) = f(x) + (Y_1, \ldots, Y_k)
+\end{equation}
+where $Y_i$ are independent and identically distributed random variables drawn from $\mathcal{N}(0, \sigma^2)$, the Gaussian distribution with mean 0 and variance $\sigma^2 = 2\ln(1.25/\delta)(\Delta_2 f)^2 / \epsilon^2$ \citep[Thm. 3.22]{Dwork2014}.
+\end{definition}
+
+The $L_2$ sensitivity $\Delta_2 f$ is the maximum $L_2$ distance between $f(x)$ and $f(y)$ for any two datasets $x, y$ differing in a single record. Intuitively, the noise variance $\sigma^2$ is proportional to $(\Delta_2 f)^2$ (more sensitive functions require more noise) and inversely proportional to $\epsilon^2$ (stricter privacy requires more noise). The term $2\ln(1.25/\delta)$ allows a $\delta$ probability of breaching $\epsilon$-DP.
+
+The Gaussian Mechanism is implemented using \texttt{rv::Gaussian} with mean 0 and standard deviation calculated from the provided $\epsilon$, $\delta$, and $L_2$ sensitivity values.
+
+\subsection{Sensitivity Calculation}
+Both mechanisms require calculating the sensitivity of the query function. For the count, sum, and average queries supported in this project, the $L_1$ and $L_2$ sensitivities are straightforward:
+\begin{itemize}
+    \item \textbf{Count:} $\Delta f = \Delta_2 f = 1$, since adding or removing one record changes the count by at most 1.
+    \item \textbf{Sum:} For a dataset with values in $[0, m]$, $\Delta f = m$ and $\Delta_2 f = m$ since a single record can change the sum by up to the maximum value $m$.
+    \item \textbf{Average:} For a dataset with $n$ records and values in $[0,m]$, $\Delta f = m/n$ and $\Delta_2 f = m/n$ by the triangle inequality, since changing one record by $m$ changes the sum by $m$ and the average by $m/n$.
+\end{itemize}
+The project currently requires the user to manually specify the sensitivity values in the configuration files. Future work could involve automatically deriving sensitivities from the data schema and value ranges.
+
+\subsection{Composition}
+A key property of differential privacy is \textit{composition}, which quantifies how privacy degrades under multiple DP releases. For a sequence of $k$ mechanisms $\mathcal{M}_1, \ldots, \mathcal{M}_k$ satisfying $(\epsilon_1, \delta_1), \ldots, (\epsilon_k, \delta_k)$-DP, respectively, their \textit{composition} satisfies $(\sum_{i=1}^k \epsilon_i, \sum_{i=1}^k \delta_i)$-DP \citep[Thm. 3.16]{Dwork2014}. More advanced composition theorems like \textit{strong composition} \citep[Thm. 3.20]{Dwork2014} give tighter bounds on the privacy loss.
+
+This project tracks the cumulative privacy loss by summing the $\epsilon$ and $\delta$ values for each DP release. The filter plugin does not yet implement strong composition or more granular per-user budgets, though incorporating these is a potential area of future development. The filter plugin can be used with both local and global DP though it's more talored for the local DP which is more limited on the techniques available for use. The flexible configuration of privacy parameters enables it to be customized to balance utility and privacy based on specific requirements and risk tolerances. As differential privacy techniques continue to mature, this plugin could serve as a template for bringing DP's rigorous privacy guarantees to a wider range of real-world applications.
 \section{Rust}
 \subsection{RV}
 RV is a Rust crate for probabilistic modeling which was chosen for it's ability to cover a wide variety of distributions. Intial attempts were made to use the OpenDP library for this purpose, however after initial hurdles of getting the package to compile for the WASM/WASI environment were overcome (with a feature flag to disable the optional dependency on OpenSSL, which doesn't have an upstream port for WASM) it was found that the documented "Measurements" module was seemingly not present in the crate. OpenDP has a wide purview of wishing to support many different differential privacy algorithms, not only for the use case of making differentially private queries on a dataset but also concerns itself on making measures and transformations on entire datasets. This added level of feature complexity isn't required for our use case, with the dual limitations imposed on us by using Local (in contrast to Global) Differential Privacy and with maintaining state across WASM function invocations.   
 
 What RV provides us is a way to create distributions and to make a random draw on said distribution, no more. Currently the Laplace and Gaussian distributions are supported by the application, however the program is structured in such a way to make it trivial to use any of RV's supported Distributions. The \texttt{fn add\_noise\_to\_value()} function is Distribution agnostic, taking any distribution defined by RV's enum of all supported distributions.
 
-\begin{lstlisting}[language=Rust, caption={Enum from rv::dist::distribution}]
+\begin{lstlisting}[language=Rust, caption={Enum from rv::dist::distribution}, label={rv-enum}]
 pub enum Distribution {
     Bernoulli(super::Bernoulli),
     Beta(super::Beta),
@@ -48,31 +97,9 @@ This allows us to add additional features with a high degree of code reuse. You 
 \subsection{serde}
 Serde is often considered one of the "core" crates is by far the most popular way to serialize and deserialize common text encoding formats to a Rust-native representation. The application uses serde both to manipulate the inputted JSON-encoded records and to deserialize the TOML-based settings files. The application uses several different strategies to make code reuse and extendability easier.
 \lstinputlisting[language=Rust, firstline=213, lastline=234, caption={Noise Settings}]{filter_dp/src/lib.rs}
-\begin{minted}{rust}
-#[derive(Deserialize)]
-#[serde(tag = "type")]
-enum Noise {
-    Laplace {
-        #[serde(default = "default_mu")]
-        mu: f64,
-        sensitivity: f64,
-        epsilon: f64,
-        #[serde(flatten)]
-        optional: OptionalSettings,
-    },
-    Gaussian {
-        #[serde(default = "default_mu")]
-        mu: f64,
-        sensitivity: f64,
-        epsilon: f64,
-        delta: f64,
-        #[serde(flatten)]
-        optional: OptionalSettings,
-    },
-}
-\end{minted}
+
 The above \texttt{enum} defines the distribution-specific settings associated with each distribution type. It derives the \texttt{Deserialize} trait from the \texttt{serde} crate. It uses serde's internal tagging feature, \texttt{\#[serde(tag = "type")]}, to use one of the struct's name's in the enum as a field labelled "type" in a TOML file. To elaborate what this equates to, this is an example TOML file that would be matched by the deserializer.
-\begin{minted}{toml}
+\begin{lstlisting}[language=toml, caption={Enum from rv::dist::distribution}]
 [example_record]
 type = "Laplace"
 sensitivity = 4.2
@@ -82,8 +109,8 @@ type = "Gaussian"
 sensitivity = 1
 epsilon = 1
 delta = 5
-\end{minted}
-In the case of an incomplete or otherwise corrupt setting, a message is sent to Anyhow (to be captured by the relevant logging infrastructure in use) if an invalid setting is given. If no such setting exists for a record, then that record is skipped from the noise addition process and is passed back to Fluent Bit without modification. 
+\end{lstlisting}
+In the case of an incomplete or otherwise corrupt setting, a message is sent to stderr with the log crate (to be captured by the relevant logging infrastructure in use) if an invalid setting is given. If no such setting exists for a record, then that record is skipped from the noise addition process and is passed back to Fluent Bit without modification. 
 
 \lstinputlisting[language=Rust, firstline=236, lastline=258, caption={Default value setters}]{filter_dp/src/lib.rs}
 
@@ -122,17 +149,6 @@ The \texttt{std::hash} module provides traits for hashing arbitrary values. In t
 
 Here's how we use the \lstinline|DefaultHasher| in the \texttt{add\_noise\_to\_value} function:
 
-\begin{minted}{rust}
-let mut rng: Box<dyn RngCore> = match &optional.rng_seed {
-        Some(seed) => {
-            let mut hasher = DefaultHasher::new();
-            seed.hash(&mut hasher);
-            let seed_hash = hasher.finish();
-            Box::new(StdRng::seed_from_u64(seed_hash))
-        }
-        None => Box::new(thread_rng()),
-    };
-\end{minted}
 \lstinputlisting[language=Rust, firstline=191, lastline=199, caption={RNG with DefaultHasher}]{filter_dp/src/lib.rs}
 
 If the \texttt{rng\_seed} is provided, we create a new \texttt{DefaultHasher}, hash the seed value, and use the resulting hash as a seed for the \texttt{StdRng} random number generator. This ensures that the generated noise is deterministic and reproducible when the same seed is used, which can be useful for testing and debugging purposes.
@@ -142,10 +158,7 @@ The \texttt{std::fs} module provides functionality for interacting with the file
 
 Here's an example from the \texttt{load\_configuration} function:
 
-\begin{minted}{rust}
-let settings_file = format!("filters/{}.toml", tag);
-let contents = fs::read_to_string(&settings_file)?;
-\end{minted}
+\lstinputlisting[language=Rust, firstline=102, lastline=107, caption={Loading the configuration file}]{filter_dp/src/lib.rs}
 
 We construct the path to the TOML file based on the tag, and then use \texttt{fs::read\_to\_string} to read the entire contents of the file into a \texttt{String}. If the file doesn't exist or there's an error reading it, the function will return an error using the \texttt{?} operator, which propagates the error to the caller.
 
@@ -161,45 +174,33 @@ At its core, Fluent Bit operates on a pluggable architecture, supporting a varie
 \end{enumerate}
 Fluent Bit's lightweight design, flexibility, and portability makes it a popular choice for log and metric collection in various environments. Its ability to scale and handle large volumes of data efficiently, combined with the ease of customization through plugins, has contributed to its widespread adoption in industry.
 
-\section{WASM}
-The decision was taken early on to use Fluent Bit's built-in support for running Filter and Input plugins using WebAssembly. WebAssembly is a binary instruction format designed to allow running code from a large variety of compiled languages to run in a cross-architecture way at greater speed.\cite{Webassembly} Fluent Bit provides examples and officially supports the use of Go and Rust as Filter plugins.  
+\section{WebAssembly (WASM)}
+WebAssembly (WASM) is a binary instruction format designed to enable the execution of code compiled from a wide range of programming languages in a cross-architecture manner with improved performance \cite{Webassembly}. The decision to leverage Fluent Bit's built-in support for running Filter and Input plugins using WASM was made early in the project. Fluent Bit provides examples and officially supports the use of Go and Rust for developing Filter plugins.
+
 \subsection{WebAssembly Micro Runtime (WAMR)}
-The \acrfull{wamr}\cite{wamr-about} is a Bytecode Alliance project that provides "a lightweight standalone WebAssembly (WASM) runtime with a small footprint, high performance, and highly configurable features for applications across from embedded, IoT, edge to Trusted Execution Environment (TEE), smart contract, cloud-native, and so on" \cite{wamr-docs}.
+The \acrfull{wamr} \cite{wamr-about} is a Bytecode Alliance project that offers a lightweight, standalone WebAssembly runtime with a small footprint, high performance, and highly configurable features. It is designed for applications spanning embedded systems, IoT, edge computing, Trusted Execution Environments (TEEs), smart contracts, and cloud-native environments \cite{wamr-docs}.
 
-WAMR aims to enable code reuse on the server side by allowing applications to run WASM programs. As stated in the documentation, it "supports multiple running modes to provide the ideal responsive time and performance on your demand" including interpreter mode, ahead-of-time (AOT) compilation mode, and just-in-time (JIT) compilation modes with support for LLVM JIT and Fast JIT \cite{wamr-docs}.
 
-The WAMR project consists of four key components:
+WAMR enables code reuse on the server-side by allowing applications to run WASM programs. It supports multiple execution modes, including interpreter mode, ahead-of-time (AOT) compilation mode, and just-in-time (JIT) compilation modes with LLVM JIT and Fast JIT support \cite{wamr-docs}. The WAMR project consists of four main components:
 
-\begin{itemize}
-\item The iwasm VM core for executing WASM applications, supporting the different execution modes mentioned above. It offers high performance "nearly native speed by AOT and JIT modes" \cite{wamr-docs} while maintaining a small runtime size and low memory usage.
+\begin{enumerate}
+    \item The iwasm VM core for executing WASM applications, supporting various execution modes while maintaining high performance, small runtime size, and low memory usage.
+    \item The wamrc AOT compiler for compiling WASM files into optimized AOT files, which can be run by the iwasm VM core to achieve the best performance and smallest runtime footprint. This is integrated into the Dockerfile build system provided for evaluation, and using AOT can reduce the executable size by approximately half.
+    \item An application framework that supports remote application management from the host environment through any physical communication channel, featuring a modular design for different managed runtimes.
+\end{enumerate}
 
-\item The wamrc AOT compiler for compiling WASM files into optimized AOT files that can be run by the iwasm VM core to achieve the best performance and smallest runtime footprint. This is integrated into the Dockerfile build system provided for evaluation. Using AOT roughly halves the executable blob. More details in 
-
-\item An application framework that "supports remote application management from the host environment or the cloud through any physical communications" and has a modular design for different managed runtimes \cite{wamr-docs}.
-
-\item An application manager providing "a comprehensive framework for programming WASM applications for device and IoT usages" based on an event-driven model, including APIs for timers, inter-app communication, sensors, connectivity, data transmission, and 2D graphics \cite{wamr-docs}.
-
-\end{itemize}
-
-WAMR supports a wide range of architectures like x86, ARM, RISC-V, and others, as well as platforms like Linux, Windows, various real-time operating systems, and more. It also has security features through Intel SGX (Software Guard Extensions) support for application isolation.
+WAMR supports a wide range of architectures, including x86, ARM, RISC-V, and others, as well as platforms such as Linux, Windows, and various real-time operating systems. It optionally also offers security features through Intel SGX (Software Guard Extensions) support for application isolation. Fluent Bit however limits WAMR deployment to only build on Linux systems on a defined list of architectures. 
 
 \subsection{WebAssembly System Interface (WASI)}
-The WebAssembly System Interface (WASI) is a modular system interface that defines a set of standard APIs for Wasm modules to interact with the host system. WASI provides a consistent and portable way for Wasm applications to access system resources and perform operations such as file I/O, networking, and more, without relying on platform-specific APIs.
+The WebAssembly System Interface (WASI) is a modular system interface that defines a set of standard APIs for WASM modules to interact with the host system. WASI provides a consistent and portable way for WASM applications to access system resources and perform operations such as file I/O, networking, and more, without relying on platform-specific APIs.
 
 \subsection{wamrc}
-wamrc is a command-line tool for compiling and running Wasm applications using the WAMR runtime environment.
+wamrc is a command-line tool provided by the WAMR project for ahead-of-time compiling WASM applications using the WAMR runtime environment. It simplifies the process of working with WASM modules and enables developers to leverage the features and optimizations offered by WAMR.
 
-\subsection{Rust and Wasm32-wasi Target}
-Rust is a systems programming language that has excellent support for generating Wasm binaries through its wasm32-wasi target. This target allows Rust code to be compiled into Wasm modules that can be executed in WASI-compliant runtimes like WAMR.
+\subsection{Rust and wasm32-wasi Target}
+Rust is a systems programming language with excellent support for generating WASM binaries through its wasm32-wasi target. This target allows Rust code to be compiled into WASM modules that can be executed in WASI-compliant runtimes like WAMR. Functions written in Rust can be compiled to WASM and executed using WAMR or any other WASI-compliant runtime.
 
-\begin{minted}{rust}
+\subsection{Fluent Bit and WASM Filter Plugins}
+Fluent Bit, a lightweight log processor and forwarder, supports extending its functionality through plugins written in various languages, including WASM. By leveraging WASM, Fluent Bit can execute filter plugins written in languages like Rust, C, or Go in a secure and sandboxed environment, enabling efficient and cross-platform data processing. This allows developers to write high-performance, portable filter plugins that can be easily integrated into Fluent Bit's data processing pipeline.
 
-\end{minted}
-
-This function can then be compiled to Wasm and executed using WAMR or any other WASI-compliant runtime.
-
-\subsection{Fluent Bit and Wasm Filter Plugins}
-Fluent Bit is a lightweight log processor and forwarder that supports extending its functionality through plugins written in various languages, including Wasm. By leveraging Wasm, Fluent Bit can execute filter plugins written in languages like Rust, C, or Go in a secure and sandboxed environment, enabling efficient and cross-platform data processing.
-
-\section{OCI}
-The decision to go with a Dockerfile 
+The combination of Rust, WASM, and Fluent Bit provides a powerful and flexible foundation for building scalable, efficient, and secure data processing solutions. By compiling Rust code to WASM and executing it within Fluent Bit's WASM runtime, developers can create highly optimized and portable filter plugins that can be deployed across a wide range of architectures and platforms.

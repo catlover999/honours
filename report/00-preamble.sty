@@ -32,14 +32,7 @@
 % Quote blocks
 \usepackage{csquotes}
 
-% Code highlighting
-\usepackage{minted}
-
 \usepackage{microtype}
-
-% Glossary / Acronym support
-\usepackage[acronym]{glossaries}
-\input{report/00-glossaries}
 
 \usepackage{tikz}
 \usetikzlibrary{positioning}
@@ -71,12 +64,7 @@
 \definecolor{colorKeyword}{HTML}{008000}
 \definecolor{colorKeywordType}{HTML}{B00040}
 \definecolor{colorNameFunction}{HTML}{0000FF}
-\definecolor{colorNameClass}{HTML}{0000FF}
-\definecolor{colorNameException}{HTML}{CB3F38}
 \definecolor{colorNameVariable}{HTML}{19177C}
-\definecolor{colorNameConstant}{HTML}{880000}
-\definecolor{colorNameLabel}{HTML}{767600}
-\definecolor{colorNameAttribute}{HTML}{687822}
 \definecolor{colorNameTag}{HTML}{008000}
 \definecolor{colorString}{HTML}{BA2121}
 \definecolor{colorNumber}{HTML}{666666}
@@ -125,12 +113,31 @@
     morestring=[b]',
     morestring=[b]"
 }
+\lstdefinelanguage{yaml}{
+    keywords={true,false,null,y,n},
+    keywordstyle=\color{colorKeyword}\bfseries,
+    basicstyle=\ttfamily\footnotesize,
+    sensitive=false,
+    comment=[l]{\#},
+    commentstyle=\color{colorComment}\itshape,
+    stringstyle=\color{colorString},
+    morestring=[b]',
+    morestring=[b]",
+    literate={\ \ }{{\ }}1
+        {---}{{\color{colorKeyword}---}}3
+        {...}{{\color{colorKeyword}...}}3,
+    identifierstyle=\color{colorNameVariable},
+}
 
 % Add ability to add links to the document
-\usepackage[breaklinks, pdfborderstyle={/S/U/W 1.5}]{hyperref}
+\usepackage[breaklinks, pdfborderstyle={/S/U/W 1}]{hyperref}
 \def\UrlBreaks{\do\/\do-} % Alters the UrlBreaks macro to allow linebreaking URLS in after / and -
 \hypersetup{
-  linkcolor=black, 
-  urlcolor=blue, 
-  linkbordercolor=black
+    urlbordercolor=blue,
+    linkbordercolor=black,
+    citebordercolor=orange
 }
+
+% Glossary / Acronym support
+\usepackage[acronym]{glossaries}
+\input{report/00-glossaries}
