@@ -514,11 +514,11 @@
 
     \vskip 40\p@%
     
-    \noindent Signed:
+    \noindent Signed: \includegraphics[scale=0.5]{report/media/signature.eps}
 
     \vskip 40\p@%
 
-    \noindent Date: \@date%
+    \noindent Date: \today%
 }
 \endinput
 
