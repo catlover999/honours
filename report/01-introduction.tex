@@ -1,14 +1,35 @@
 \chapter{Introduction\label{chap:introduction}}
 \section{Overview}
 
+This project focuses on the development of a Rust-based Filter plugin for Fluent Bit that integrates Differential Privacy techniques to protect the privacy of individuals in data streams while allowing for valuable insights to be derived from the data. The filter plugin applies Differential Privacy by adding noise drawn from either a Laplace or Gaussian distribution to numeric data based on user-defined settings. The plugin is compiled to a WebAssembly (WASM) binary, which Fluent Bit loads and executes in a sandboxed environment, ensuring portability and security.
 
+To evaluate the effectiveness and performance of the filter plugin, an evaluation infrastructure is created using a multi-stage Dockerfile. The infrastructure compiles the filter plugin to WASM, builds Fluent Bit with WASM support, and optionally pre-optimizes the WASM binary using Ahead-of-Time (AOT) compilation for improved performance. The filter plugin is then executed by Fluent Bit, processing two sample datasets according to a provided configuration file. The results are saved to output files and loaded into a Jupyter Notebook for analysis and visualization.
 
-
-The project comprises the main application, the Rust Filter plugin itself, along with the evaluation infrastructure in able to run said plugin. The evaluation infrastructure is multifaceted: coordinated by the main Dockerfile, the filter plugin is first compiled to a WASM binary, Fluent Buit is built, the WASM is optionally pre-optimized for the architecture, the filter plugin is run with Fluent Bit that feeds it 2 sample datasets and processes it with a sample configuration, finally the results are copied over to a Jupyter Notebook container. Once the Dockerfile is built, it can be run to start up a token-authenticated web server to view the Jupiter Notebook file and associated data processing.
-
-\section{Motivation}
-With the ever-increase in data collection from 
-
+\section{Research Question}
+The central research question addressed by this project is:
+\textit{How can Differential Privacy be effectively integrated into a high-performance data processing pipeline, such as Fluent Bit, to protect individual privacy while maintaining data utility and ensuring portability across various environments?}
+By answering this question, the project aims to contribute to the field of privacy-preserving data analysis and provide a practical solution for applying Differential Privacy in real-world scenarios.
 \section{Objectives}
-The primary goal of the project is to develop a WASM filter plugin for Fluent Bit that applies DP techniques to numeric data on a device level (though Fluent Bit has wide application throughout the data pipeline).
-
+The main objectives of this project are:
+\begin{enumerate}
+\item Develop a Rust-based Filter plugin for Fluent Bit that applies Differential Privacy techniques to numeric data using the Laplace and Gaussian mechanisms.
+\item Compile the filter plugin to a WASM target to ensure compatibility with Fluent Bit's WASM plugin system and enable portability across different platforms.
+\item Design a flexible configuration system using TOML files to allow users to specify privacy settings for each data stream.
+\item Integrate the WASM plugin into Fluent Bit, ensuring proper data flow and error handling.
+\item Create an evaluation infrastructure using Docker to demonstrate the plugin's functionality and performance on sample datasets.
+\item Analyze the results using a Jupyter Notebook to assess the impact of Differential Privacy on data utility and privacy.
+\end{enumerate}
+\section{Contributions}
+The primary contributions of this project are:
+\begin{itemize}
+\item A novel implementation of Differential Privacy techniques in a WASM-based filter plugin for Fluent Bit, enabling privacy-preserving data processing in a high-performance, portable, and secure manner.
+\item A flexible configuration system that allows users to easily specify and adjust privacy settings for each data stream, facilitating the adoption of Differential Privacy in various scenarios.
+\item An evaluation infrastructure that demonstrates the effectiveness and performance of the filter plugin on sample datasets, providing insights into the impact of Differential Privacy on data utility and privacy.
+\item A comprehensive analysis of the results, highlighting the trade-offs between privacy and utility and offering guidance for applying Differential Privacy in real-world data processing pipelines.
+\end{itemize}
+By addressing the challenges of integrating Differential Privacy into a widely-used open-source log processor like Fluent Bit, this project contributes to the broader goal of making privacy-preserving data analysis more accessible and easier to deploy across various environments. The project's outcomes have the potential to facilitate the adoption of Differential Privacy in a wide range of applications, ultimately leading to better protection of individual privacy while still enabling valuable insights to be derived from sensitive data.
+\section{Motivation}
+The increasing collection and analysis of personal data have led to growing concerns about privacy and the potential misuse of sensitive information. Differential Privacy has emerged as a strong standard for privacy-preserving data analysis, providing rigorous guarantees while still allowing for accurate statistical insights. However, integrating Differential Privacy into real-world data processing pipelines can be challenging due to the lack of portable, high-performance implementations that can be easily deployed across various platforms and languages.
+Fluent Bit, a lightweight and highly efficient log processor and forwarder, presents an ideal opportunity to address this challenge. By creating a WASM-based Differential Privacy plugin for Fluent Bit, this project aims to make privacy-preserving data analysis more accessible and easier to integrate into existing data processing workflows. The use of WASM ensures portability across different environments, while Fluent Bit's high-performance architecture enables the application of Differential Privacy techniques without significant overhead.
+Moreover, by integrating Differential Privacy at the data ingestion and processing stage, this project allows for the protection of sensitive information early in the data pipeline, reducing the risk of privacy breaches and ensuring that data is anonymized before being stored or analyzed further downstream. This approach promotes a proactive stance towards privacy, aligning with the principles of privacy by design.
+The motivation behind this project lies in the belief that privacy should be a fundamental right and that technological solutions, such as Differential Privacy, can play a crucial role in safeguarding individual privacy while still enabling the benefits of data-driven decision-making. By making Differential Privacy more accessible and easier to implement through the development of a WASM-based plugin for Fluent Bit, this project seeks to contribute to the wider adoption of privacy-preserving techniques in real-world scenarios, ultimately leading to a more secure and trustworthy data ecosystem.

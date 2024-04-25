@@ -15,7 +15,15 @@
 \makedeclaration
 
 \begin{abstract}
-This project aims to create a Filter plugin for Fluent Bit that implements additive noise \acrlong{dp}. It achieves this aim by writing a Rust-based filter plugin that's compiled to a WASM target which Fluent Bit loads. Laplacian and Gaussian mechanisms to achieve $\epsilon$-differential privacy and $(\epsilon,\delta)$-differential privacy respectfully.
+This project aims to develop a Filter plugin for Fluent Bit that implements additive noise \acrlong{dp} techniques to protect individual privacy while allowing for valuable insights to be derived from sensitive data. Differential Privacy has emerged as a leading standard for privacy-preserving data analysis, providing a rigorous framework to quantify and control the privacy loss incurred when performing statistical analyses on sensitive data. However, many existing DP implementations lack the portability needed for widespread adoption.
+
+To address this challenge, the project presents a Rust-based filter plugin that is compiled to a WebAssembly (WASM) target, which Fluent Bit, an industry-standard open-source log and metric processor, loads and executes in a sandboxed environment. The plugin applies the Laplacian mechanism for $\epsilon$-differential privacy and the Gaussian mechanism for $(\epsilon, \delta)$-differential privacy. By adding carefully calibrated noise to the data based on the sensitivity of the function and the privacy budget $\epsilon$, the plugin ensures that the presence or absence of any individual's data does not significantly affect the analysis results.
+
+The WASM-based architecture enables the DP algorithms to run seamlessly across different platforms, taking advantage of Fluent Bit's high-performance data processing capabilities. The plugin's settings for each data stream are loaded from TOML configuration files, allowing for flexible and dynamic control over the privacy parameters. Evaluation of the plugin's effectiveness and performance is conducted using sample datasets and a Jupyter Notebook to analyze the utility and privacy of the perturbed data.
+
+This project demonstrates the feasibility of integrating DP into a production-ready log processing framework using WASM for enhanced portability and security. It provides a solid foundation for privacy-preserving data analysis within Fluent Bit's extensible plugin ecosystem, enabling the protection of sensitive information while still allowing for valuable insights to be gained from the data. The project's outcomes contribute to the broader goal of making privacy-preserving techniques more accessible and easier to deploy in real-world scenarios.
+
+Future work could focus on expanding the range of supported probability distributions and DP algorithms, as well as exploring the integration of the plugin with other data processing frameworks. By building upon this project's findings and extending its capabilities, researchers and practitioners can continue to advance the field of privacy-preserving data analysis and work towards a more secure and trustworthy data ecosystem.
 \end{abstract}
 
 \begin{acknowledgements}
@@ -29,6 +37,7 @@ I would like to acknowledge that Fluent Bit's Documentation around WASM support 
 \sfthing{\FF}{F}
 
 \printglossary[type=\acronymtype]
+\printglossary
 \tableofcontents
 %\listoftables
 %\listoffigures

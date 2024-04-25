@@ -1,6 +1,15 @@
 \chapter{Summary and Conclusion\label{chap:conclusion}}
 \section{Future Work}
 \subsection{Expanding supported distributions}
-One additional distribution that has come up while reading the literature is the Binomial distribution\cite{Dwork2006calibrating}. This distribution also enjoys support from the RV library (see )
+The plugin currently supports the Laplace and Gaussian mechanisms for adding noise to the data. While these are two of the most commonly used mechanisms in Differential Privacy, there are other noise distributions that could be beneficial in certain scenarios. For example, the Binomial distribution has been shown to be effective for count data and is sometimes listed alongside the other 'big two'\cite{Dwork2006calibrating}. This distribution additionally enjoys support from the RV library (see Listing \ref{rv-enum}) so would be reasonably trivial with the current Filter plugin architecture to add support for it. Expanding the range of supported distributions would give users more flexibility in choosing the most appropriate mechanism for their specific data and privacy requirements.
+
+\subsection{Automated sensitivity analysis}
+The sensitivity of a function is a crucial parameter in Differential Privacy, as it determines the amount of noise required to achieve a given level of privacy. Currently, the sensitivity must be manually specified by the user in the configuration files. Developing techniques for automatically estimating the sensitivity based on the input data and the desired analysis could simplify the configuration process and reduce the risk of misconfiguration.
+
+\subsection{Integration with other log processing systems}
+While Fluent Bit is a popular choice for log processing, there are many other systems in use, such as Logstash, Fluentd, and Splunk. Porting the Differential Privacy plugin to these other systems would make it accessible to a wider range of users and environments. This could involve adapting the plugin to different plugin architectures to provide an interface compatibly with that system's ABI. Supporting other data representations (such as msgpack) could improve flexibility further by removing the hard internal JSON representation related code. This would mean using more built-in data types (such as greater use of \texttt{HashMaps} instead of \texttt{serde\_json}'s \texttt{Value}) where applicable.
+
+\subsection{Enhancing the evaluation framework}
+The current evaluation framework provides a basic setup for testing and analyzing the Differential Privacy plugin on sample datasets. Extending this framework with more comprehensive and automated tests, as well as support for user-provided datasets, would make it easier to evaluate the plugin's performance and validate its correctness. Adding some mechanism to rerun Fluent Bit from within the Jupyter Notebook may be desirable to allow for more rapid prototyping. Having Fluent Bit run within the Jupyer Notebook environment could potentially be combined with Fluent Bit's "hot reloading" of configuration files, to be able to modify Fluent Bit-specific configuration at runtime. Additionally, integrating more advanced data visualization and statistical analysis tools into the Jupyter Notebook environment could facilitate deeper insights into the impact of Differential Privacy on data utility and privacy. 
 
 \section{Conclusion}
