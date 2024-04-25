@@ -117,7 +117,8 @@ Quit,Quit,Quit,Quit,Quit,0,0,0
 \end{lstlisting}
 
 Only one instance of "Quit" is actually required, however more doesn't hurt. In the main Fluent Bit config file, not only are the perturbed results written to an output file as seen in Listing \ref{code:out-file} but all events are also sent to \texttt{stdout}.
-\lstinputlisting[language=yaml, firstline=40, lastline=41, caption={Example dataset: Salaries File plugin configuration}]{fluent-bit.yaml}
+\lstinputlisting[language=yaml, firstline=40, lastline=41, caption={Usting the stdout plugin which matches all events}]{fluent-bit.yaml}
+This could probably be reworked to reduce the amount of data 
 
 \subsection{Overview of OCI build stage flow}
 \begin{tikzpicture}[
