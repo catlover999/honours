@@ -77,11 +77,10 @@ RUN bin/fluent-bit -c fluent-bit.yaml | { \
 
 # 3. Evaualtion stage
 FROM docker.io/jupyter/scipy-notebook:latest
-COPY project.ipynb requirements.txt ./
+COPY project.ipynb .
 USER root
 RUN chown jovyan:users project.ipynb
 USER jovyan
-RUN pip install --no-cache-dir -r requirements.txt
 COPY input input
 COPY --from=fluent-runner /fluent-bit/output/ output
 

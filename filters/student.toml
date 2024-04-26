@@ -1,14 +1,14 @@
 [math_score]
 type = "Laplace"
-sensitivity = 7.58
+sensitivity = 3.79
 epsilon = 1.0
 
 [reading_score]
 type = "Laplace"
-sensitivity = 7.3
+sensitivity = 3.65
 epsilon = 0.75
 
 [writing_score]
 type = "Laplace"
-sensitivity = 7.6
+sensitivity = 3.79
 epsilon = 0.5
