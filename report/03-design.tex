@@ -99,7 +99,7 @@ Serde is often considered one of the "core" crates is by far the most popular wa
 \lstinputlisting[language=Rust, firstline=213, lastline=234, caption={Noise Settings}]{filter_dp/src/lib.rs}
 
 The above \texttt{enum} defines the distribution-specific settings associated with each distribution type. It derives the \texttt{Deserialize} trait from the \texttt{serde} crate. It uses serde's internal tagging feature, \texttt{\#[serde(tag = "type")]}, to use one of the struct's name's in the enum as a field labelled "type" in a TOML file. To elaborate what this equates to, this is an example TOML file that would be matched by the deserializer.
-\begin{lstlisting}[language=toml, caption={Enum from rv::dist::distribution}]
+\begin{lstlisting}[language=toml, caption={Example privacy settings}]
 [example_record]
 type = "Laplace"
 sensitivity = 4.2
@@ -107,8 +107,8 @@ epsilon = 0.9
 [example2]
 type = "Gaussian"
 sensitivity = 1
-epsilon = 1
-delta = 5
+epsilon = 0.5
+delta = 0.001
 \end{lstlisting}
 In the case of an incomplete or otherwise corrupt setting, a message is sent to stderr with the log crate (to be captured by the relevant logging infrastructure in use) if an invalid setting is given. If no such setting exists for a record, then that record is skipped from the noise addition process and is passed back to Fluent Bit without modification. 
 
@@ -118,7 +118,7 @@ The above shows the current behaviour regarding default values. Although a bit v
 
 Using a struct for OptionalSettings has significantly reduced code duplication and vastly simplified the process of adding additional settings as the individual distribution code can pass a generic OptionalSettings variable to \texttt{fn add\_noise\_to\_value}, meaning that you can add additional settings and setting handling code with the result being applied to every distribution you implement. With the use of Serde JSON's \texttt{\#[serde(flatten)]} container attribute, all values contained within OptionalSettings are tried as if they were on the same level as the variables contained within the parent struct. For example:
 
-\begin{lstlisting}[language=TOML, caption={Test}]
+\begin{lstlisting}[language=TOML, caption={Example privacy setting with fixed RNG seed}]
 [example_optional]
 type = "Laplace"
 sensitivity = 4.2

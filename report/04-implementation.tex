@@ -108,7 +108,7 @@ The Fluent Bit build stage was loosely based on the official Fluent Bit Dockerfi
 \subsection{Fluent Bit execution stage}
 In this stage, Fluent Bit is exececuted after some input data preprocessing. More details about the data preprocessing can be found in \ref{splitting}. Special arrangements were needed to get Fluent Bit to execute within the Docker build stage which would not be found in production.
 
-Fluent Bit is designed to be always running. Either in foreground when executing the \texttt{fluent-bit} binary directly, or as a \Gls{daemon} in the background. This is because in all designed deployments of Fluent Bit, it is supposed to be continuously monitoring an input source, before filtering, buffering, and sending on \glspl{event} to their final destination. What Fluent Bit is not designed to do is to run with a defined finite input and then stop once that input has been fully read and processed. One potential solution is to run Fluent Bit in the background (using \texttt{bash}'s built-in \texttt{\&} operator) before \texttt{wait}ing a predetermined number of seconds for all processing to occur before \texttt{kill}ing the background running process. That has the drawback that it doesn't automatically scale with the increase in data that you feed it and that the processing time can vary between machines, leading to potential undefined behaviour on other systems. 
+Fluent Bit is designed to be always running. Either in the foreground when executing the \texttt{fluent-bit} binary directly or as a \Gls{daemon} in the background. This is because in all designed deployments of Fluent Bit, it is supposed to be continuously monitoring an input source, before filtering, buffering, and sending on \glspl{event} to their final destination. What Fluent Bit is not designed to do is to run with a defined finite input and then stop once that input has been fully read and processed. One potential solution is to run Fluent Bit in the background (using \texttt{bash}'s built-in \texttt{\&} operator) before \texttt{wait}ing a predetermined number of seconds for all processing to occur before \texttt{kill}ing the background running process. That has the drawback that it doesn't automatically scale with the increase in data that you feed it and that the processing time can vary between machines, leading to potential undefined behaviour on other systems. 
 
 The finally solution chosen to combat this problem involves having a "control event". This event is placed at the end of one of the input files (in our case, \texttt{StudentsPerformance.csv}). What's important is that this control event contains the string "Quit". The current control string is as follows:
 
@@ -116,9 +116,20 @@ The finally solution chosen to combat this problem involves having a "control ev
 Quit,Quit,Quit,Quit,Quit,0,0,0
 \end{lstlisting}
 
-Only one instance of "Quit" is actually required, however more doesn't hurt. In the main Fluent Bit config file, not only are the perturbed results written to an output file as seen in Listing \ref{code:out-file} but all events are also sent to \texttt{stdout}.
+Only one instance of "Quit" is actually required; however, more doesn't hurt. In the main Fluent Bit config file, not only are the perturbed results written to an output file as seen in Listing \ref{code:out-file} but all events are also sent to \texttt{stdout}.
 \lstinputlisting[language=yaml, firstline=40, lastline=41, caption={Usting the stdout plugin which matches all events}]{fluent-bit.yaml}
-This could probably be reworked to reduce the amount of data 
+This could probably be reworked to reduce the amount of data sent to stdout by using an additional filter plugin stage (such as the "Rewrite Tag" or "grep" plugins) to send only the control sequence to stdout. However this is only a problem while evaluating the plugin on static data and not in-production.
+
+All stdout of Fluent Bit is piped to GNU \texttt{grep}, which will match the first found instance of the control sequence. Once found, it will \texttt{sleep} for 5 seconds (for additional safety that the pipeline has been fully flushed, as Fluent Bit doesn't place a guarantee that non-connected pipeline stages will execute in a determined order). This wait may be shortened or lengthened based on evaluation requirements, though it's better to wait in order not to lose any events that haven't been sent to the Tail plugin yet. Once the wait is over, a SIGTERM signal is sent to Fluent Bit process. This is gracefully handled by Fluent Bit, which will start its shutdown sequence that is set to take a maximum of 5 seconds. An internal watchdog mechanism automatically intervenes if the shutdown process is not completed within this designated period. This watchdog is likely configured to send a more forceful termination signal, such as SIGKILL, to ensure that the application terminates promptly, preventing any potential hang or deadlock situations. This is essential as for a \texttt{RUN} command to complete successfully, it's constituent shell executed script must return without error.
+\lstinputlisting[firstline=71, lastline=76, caption={Fluent Bit Execution Environment}]{Dockerfile}
+
+\subsection{Jupiter Notebook}
+The Dockerfile then finally pulls in the Jupyter Notebook Docker Stack from the \texttt{jupyter/scipy-notebook} image. This provides a full Jupyter Notebook server that can be accessed through the localhost link printed after the built container is started with podman run or docker run. Do note it's insufficient to go to localhost:8888 directly as the default Jupyter Notebook Docker Stack setting is token-authenticated. This token is embedded in the printed URI. 
+
+With your chosen browser, the link will present you with a VS Code-like environment. Once navigating to "\texttt{project.ipynb}", one can then go to "Run>Run All Cells" in the header bar. This will rerun all the evaluation code.
+
+The evaluation code currently uses Pandas, Numpy, and Pyplot from Matplotlib, however this is a prime area of future expansion to incorporate more data processing libraries such as OpenDP to perform further mesament to quantify the privacy gain and utility loss. Pandas, Numpy, and Matplotlib are all already included in the \texttt{jupyter/scipy-notebook} image. A previous itteration of the Dockerfile copied in a \texttt{requirements.txt} before running pip with the file as an argument. However as no dependencies were needed beyond what's already included in a standard environment, therefore such an approach of coping around requirements files should only be implemented in a scenario of expanded scope.
+
 
 \subsection{Overview of OCI build stage flow}
 \begin{tikzpicture}[
@@ -144,4 +155,3 @@ This could probably be reworked to reduce the amount of data
 \end{tikzpicture}
 
 
-\section{Jupiter Notebook}
