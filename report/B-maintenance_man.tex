@@ -17,6 +17,14 @@ If you wish to develop the application on your host, you will need to make sure 
     \item For Windows: download the upstream X86\_64 Windows binary installer at \href{https://win.rustup.rs/x86_64}{\nolinkurl{https://win.rustup.rs/x86\_64}}. Refer to Upstream documentation. This target OS was untested for this project, and thus, it is recommended to use (a containerized) Unix-like environment if possible.
 \end{itemize}
 However, none of the code is WASM-specific, so you can use the library compiled to any architecture which has support for all used dependencies. You are able to use the library from any programming language supporting the C Foreign Function Interface (thus, applicable C types). Note: wasm32-unknown-unknown is an unsupported target. We require the WASI environment to provide an interface for file I/O operations, in addition, rand requires manual intervention to specify the source of randomness where none can be assumed. The application is designed to panic if an improperly formatted UTF-8 tag variable or JSON-formatted records variable is passed to the filter plugin. User input nor log corruption should not be able to invoke a panic as Fluent Bit internally sanitizes inputs. Fluent Bit is the one responsible for correctly formatting strings / encoding JSON so shouldn't be possible in normal operation. The only time in development that this was triggered was when passing 0 length values into either case. It was deliberately decided that panicking in these cases is acceptable.
+\subsection{Build manually}
+Once you have Rust and Cargo installed with the \texttt{wasm32-wasi}, you can build the WASM binary with:
+
+\texttt{cargo build --release --target wasm32-wasi}
+
+This binary cannot be directly run and needs to be loaded by an external program (ie Fluent Bit).
+
+Do note that if you have rust-analyzer installed, you can develop the codebase with confidence that if Rust Analyzer doesn't detect any problems, then the application likely functions without any further intervention. The issues I've had that weren't captured by Rust Analyzer were mostly "functional bugs" as in, was already captured by error handling (at the time \texttt{.unwrap()} however better practice regarding panicking have since been adopted) or weren't wholly Rust problems (the most notable is that formally I didn't convert the rust string to a CString, like Fluent Bit's own Rust WASM example, which sometimes worked but sometimes deallocated as this memory should be \texttt{free()}ed by Fluent Bit itself but I encounter a situation where Rust would sometimes free the string and sometimes not so some events were dropped and some weren't. Well they were all deallocated by Rust. But the pointer was handed over to C was for that string's former location). Therefore when it did work, it was due to unintentional use-after-free from Fluent Bit of the Rust string. You need to put the string into a CString so that Rust doesn't deallocate it when it passes the \acrlong{ffi} barrier. 
 
 \section{Apple Silicon Mac patch}
 In order to build on an Apple Silicon Mac, the following patch may be applied to the fluent-bit submodule. This is needed at least when running on Asahi Linux while using WAMR's AOT compile option. WAMR autodetects aarch64 when optimizing for the current architecture, however, when Fluent Bit attempts to load the binary it complains that it was expecting "aarch64v8" and received "aarch64". Going by the documentation, intended behaviour is that anything built for aarch64 should run on any aarch64 varient, however this may be a Fluent Bit configuration error.
@@ -40,3 +48,5 @@ diff --git a/lib/wasm-micro-runtime-WAMR-1.3.0/core/iwasm/aot/arch/aot_reloc_aar
  
  void
 \end{lstlisting}
+
+This patch will need to be written to a file, \texttt{COPY} over to \texttt{fluent} stage, and applied to the \texttt{/src/fluent-bit} directory with the \texttt{git apply <filename>} command. Ensure filebreaks are correctly copied over.

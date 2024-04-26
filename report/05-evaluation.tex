@@ -9,8 +9,14 @@ The experimental setup involved the following steps:
     \item Fluent Bit, a lightweight data processor, was used to process the data streams. The Rust plugin was integrated into Fluent Bit as a filter, allowing for the application of differential privacy mechanisms to the data in real-time.
     \item The perturbed datasets were stored in separate output files, "EmployeeSalaries.perturbed.csv" and "StudentsPerformance.perturbed.csv", for further analysis.
 \end{enumerate}
+
+Both of the datasets were sourced from Kaggle. "Students Performance in Exams" is a fictional dataset of 1000 entries listed \href{https://www.kaggle.com/datasets/spscientist/students-performance-in-exams}{here} and which was originally sourced from the \href{http://roycekimmons.com/tools/generated_data/exams}{website} of Professor Royce Kimmons from Brigham Young University where they have several generated datasets for educational purposes and which is licensed under \href{https://creativecommons.org/licenses/by/4.0/}{CC BY}. The second dataset, \texttt{EmployeeSalaries.csv}, is, in their own words, an "Annual salary information including gross pay and overtime pay for all active, permanent employees of Montgomery County, MD paid in calendar year 2023. This dataset is a prime candidate for conducting analyses on salary disparities, the relationship between department/division and salary, and the distribution of salaries across gender and grade levels. Statistical models can be applied to predict base salaries based on factors such as department, grade, and length of service. Machine learning techniques could also be employed to identify patterns and anomalies in the salary data, such as outliers or instances of significant inequity."\cite{Maharaj_2024} This can be found on \href{https://www.kaggle.com/datasets/sahirmaharajj/employee-salaries-analysis}{Kaggle} and was likely sourced from public data found \href{https://catalog.data.gov/dataset/employee-salaries-2023/resource/e37ac7bc-895e-46a4-be93-07e1c07ee0eb}{here}. On Kaggle it is licensed under the terms of \href{https://www.apache.org/licenses/LICENSE-2.0}{Apache 2.0}. A copy of both Licenses can be found in the \texttt{LICENSE} file in the main code tarball or on the GitHub repository.
+
+These datasets were chosen to provide a broad range example of types of individual data that could benefit from additive noise differential privacy when collecting from individuals. Both from real-world sources and a fictional sample to illustrate the potential and to validate against. 
+
 \section{Evaluation Metrics}
-To assess the performance of the differential privacy mechanisms implemented in the filter plugin, we employ three commonly used evaluation metrics: Mean Absolute Error (MAE), Mean Squared Error (MSE), and Root Mean Squared Error (RMSE). Equations in this section were sourced from \cite{Hodson2022}
+To assess the performance of the differential privacy mechanisms implemented in the filter plugin, we employ three commonly used evaluation metrics: Mean Absolute Error (MAE), Mean Squared Error (MSE), and Root Mean Squared Error (RMSE) equations in this section were sourced from \cite{Hodson2022}
+
 \subsection{Mean Absolute Error (MAE)}
 The Mean Absolute Error (MAE) measures the average magnitude of the errors between the original and perturbed values, without considering their direction. It is calculated by taking the average of the absolute differences between the original and perturbed values \cite{Willmott2005}. The formula for MAE is given by:
 \begin{equation}
@@ -33,7 +39,8 @@ These evaluation metrics provide insights into the accuracy and utility of the d
 \subsection{Test Environment}
 The test environment was constructed with a multi-build context Docker container. The first two stages concerned themselves with building the filter plugin along with Fluent Bit with a non-default build option (only needed if AoT is to be built).
 \subsection{Experimental Setup}
-The experimental setup involved running the Docker container, which executed the data processing pipeline. The split sample dataset files were ingested by Fluent Bit, processed by the Rust filter plugin with the specified differential privacy settings, and the perturbed outputs were saved to separate CSV files.
+The experimental setup involved running the Docker container, which executed the data processing pipeline. The split sample dataset files were ingested by Fluent Bit, processed by the Rust filter plugin with the specified differential privacy settings, and the perturbed outputs were saved to separate CSV files. More details can be found in the Implementation chapter, \ref{chap:implementation}.
+\newpage
 \section{Results}
 After running the experiment with the updated differential privacy settings, the following results were obtained:
 \begin{table}[H]
@@ -96,7 +103,7 @@ reading\_score - Std & 14.60 & 16.23 \\
 writing\_score - Mean & 68.05 & 68.38 \\
 writing\_score - Std & 15.20 & 18.39 \\
 \hline
-\end{tabular}[H]
+\end{tabular}
 
 \caption{Comparison of original and perturbed student scores statistics}
 \label{tab:student_scores_stats}
@@ -105,7 +112,7 @@ Table \ref{tab:student_scores_stats} presents a comparison of the statistical pr
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.8\textwidth]{report/media/salaries.png}
+\includegraphics[width=1\textwidth]{report/media/salaries.png}
 \caption{Distribution of original and perturbed Base\_Salary values}
 \label{fig:base_salary_distribution}
 \end{figure}
@@ -114,7 +121,7 @@ Figure \ref{fig:base_salary_distribution} shows the distribution of the original
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.8\textwidth]{report/media/scores.png}
+\includegraphics[width=\textwidth]{report/media/scores.png}
 \caption{Distribution of original and perturbed student scores}
 \label{fig:student_scores_distribution}
 \end{figure}
@@ -122,7 +129,7 @@ Figure \ref{fig:base_salary_distribution} shows the distribution of the original
 Figure \ref{fig:student_scores_distribution} displays the distributions of the original and perturbed student scores (math, reading, and writing). The perturbed distributions are slightly more spread out compared to the original distributions due to the addition of Laplace noise. However, the overall shapes of the distributions are maintained, ensuring that the perturbed data still retains its utility for analysis.
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.8\textwidth]{report/media/distribution.png}
+\includegraphics[width=\textwidth]{report/media/distribution.png}
 \caption{Error distributions for Base\_Salary and student scores}
 \label{fig:error-distributions}
 \end{figure}
