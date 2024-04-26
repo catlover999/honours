@@ -5,7 +5,7 @@ Differential Privacy (DP) is a mathematical framework for protecting individual 
 This project implements two key mechanisms for achieving differential privacy: the Laplace Mechanism for $\epsilon$-DP and the Gaussian Mechanism for $(\epsilon, \delta)$-DP. The following subsections detail these mechanisms and their underlying probability distributions.
 
 \subsection{Laplace Mechanism}
-The Laplace Mechanism achieves $\epsilon$-differential privacy by adding noise drawn from the Laplace distribution to the output of a function $f$. The scale parameter $b$ of the distribution is set to $\Delta f / \epsilon$, where $\Delta f$ is the $L_1$ sensitivity of $f$, defined as the maximum change in $f$'s output that can result from modifying a single record.
+The Laplace Mechanism achieves $\epsilon$-differential privacy by adding noise drawn from the Laplace distribution to the output of a function $f$. The scale parameter $b$ of the distribution is set to $\Delta f / \epsilon$, where $\Delta f$ is the $L_1$ sensitivity of $f$, defined as the maximum change in $f$'s output that can result from modifying a single record. Definitions were derived from the work of \citet{Dwork2014}.
 
 \begin{definition}[Laplace Mechanism]
 Given any function $f: \mathbb{N}^{|\mathcal{X}|} \rightarrow \mathbb{R}^k$, the Laplace Mechanism is defined as:
@@ -34,7 +34,7 @@ where $Y_i$ are independent and identically distributed random variables drawn f
 
 The $L_2$ sensitivity $\Delta_2 f$ is the maximum $L_2$ distance between $f(x)$ and $f(y)$ for any two datasets $x, y$ differing in a single record. Intuitively, the noise variance $\sigma^2$ is proportional to $(\Delta_2 f)^2$ (more sensitive functions require more noise) and inversely proportional to $\epsilon^2$ (stricter privacy requires more noise). The term $2\ln(1.25/\delta)$ allows a $\delta$ probability of breaching $\epsilon$-DP.
 
-The Gaussian Mechanism is implemented using \texttt{rv::Gaussian} with mean 0 and standard deviation calculated from the provided $\epsilon$, $\delta$, and $L_2$ sensitivity values.
+The Gaussian Mechanism is implemented using \texttt{rv::Gaussian} with the default mean of 0.0 and standard deviation calculated from the provided $\epsilon$, $\delta$, and $L_2$ sensitivity values.
 
 \subsection{Sensitivity Calculation}
 Both mechanisms require calculating the sensitivity of the query function. For the count, sum, and average queries supported in this project, the $L_1$ and $L_2$ sensitivities are straightforward:
@@ -50,8 +50,10 @@ A key property of differential privacy is \textit{composition}, which quantifies
 
 This project tracks the cumulative privacy loss by summing the $\epsilon$ and $\delta$ values for each DP release. The filter plugin does not yet implement strong composition or more granular per-user budgets, though incorporating these is a potential area of future development. The filter plugin can be used with both local and global DP, though it's more tailored for the local DP, which is more limited on the techniques available for the local case. The flexible configuration of privacy parameters enables it to be customized to balance utility and privacy based on specific requirements and risk tolerances. As differential privacy techniques continue to mature, this plugin could serve as a template for bringing DP's rigorous privacy guarantees to a wider range of real-world applications.
 \section{Rust}
+Rust was chosen for this project for its memory-safe and memory-efficient properties. The Rust Analyzer usually prevents non-working code from compiling, thus decreasing debugging overhead once all issues identified by it were dealt with. Rust is a prime target for the WASM environment, with Fluent Bit providing several examples within their main repository of example Rust WASM filters. Rust's borrow checker eliminates the requirement to either manually free memory or rely on garbage collection. The use of \texttt{Option<T>} and \texttt{Result<T,E>} combined with the powerful versatility of Rust's \texttt{match} statement allowed for clean error handling to cover all cases without excessive verbosity. Rust's enums are versatile to create and manipulate objects with a minimal memory footprint. Rust reduces the pain of freeing and resizing heap objects compared with, say, a language like C. Unlike some other high-level languages, Rust integrates well with WASM, compiling to the target with all libraries internally linked. 
+
 \subsection{RV}
-RV is a Rust crate for probabilistic modeling which was chosen for it's ability to cover a wide variety of distributions. Intial attempts were made to use the OpenDP library for this purpose, however after initial hurdles of getting the package to compile for the WASM/WASI environment were overcome (with a feature flag to disable the optional dependency on OpenSSL, which doesn't have an upstream port for WASM) it was found that the documented "Measurements" module was seemingly not present in the crate. OpenDP has a wide purview of wishing to support many different differential privacy algorithms, not only for the use case of making differentially private queries on a dataset but also concerns itself on making measures and transformations on entire datasets. This added level of feature complexity isn't required for our use case, with the dual limitations imposed on us by using Local (in contrast to Global) Differential Privacy and with maintaining state across WASM function invocations.   
+RV is a Rust crate for probabilistic modeling which was chosen for it's ability to cover a wide variety of distributions. Intial attempts were made to use the OpenDP library for this purpose, however after initial hurdles of getting the package to compile for the WASM/WASI environment were overcome (with a feature flag to disable the optional dependency on OpenSSL, which doesn't have an upstream port for WASM) it was found that the documented "Measurements" module was seemingly not present in the crate. OpenDP has a wide purview of wishing to support many different differential privacy algorithms, not only for the use case of making differentially private queries on a dataset but also concerns itself on making measures and transformations on entire datasets. This added level of feature complexity isn't required for our use case, with the dual limitations imposed on us by primarily targeting Local (in contrast to Global) Differential Privacy and with maintaining state across WASM function invocations.   
 
 What RV provides us is a way to create distributions and to make a random draw on said distribution, no more. Currently the Laplace and Gaussian distributions are supported by the application, however the program is structured in such a way to make it trivial to use any of RV's supported Distributions. The \texttt{fn add\_noise\_to\_value()} function is Distribution agnostic, taking any distribution defined by RV's enum of all supported distributions.
 
@@ -91,8 +93,6 @@ pub enum Distribution {
 \end{lstlisting}
 
 This allows us to add additional features with a high degree of code reuse. You only need to add the relevant distribution-specific properties to the relevant \texttt{enum Noise {...}} and any distribution-specific calculations to the \texttt{match setting {...}} in \texttt{fn process\_setting\_for\_record}. 
-
-\subsection{rand}
 
 \subsection{serde}
 Serde is often considered one of the "core" crates is by far the most popular way to serialize and deserialize common text encoding formats to a Rust-native representation. The application uses serde both to manipulate the inputted JSON-encoded records and to deserialize the TOML-based settings files. The application uses several different strategies to make code reuse and extendability easier.
@@ -162,26 +162,13 @@ Here's an example from the \texttt{load\_configuration} function:
 
 We construct the path to the TOML file based on the tag, and then use \texttt{fs::read\_to\_string} to read the entire contents of the file into a \texttt{String}. If the file doesn't exist or there's an error reading it, the function will return an error using the \texttt{?} operator, which propagates the error to the caller.
 
-\section{Fluent Bit}
-Fluent Bit is a popular open-source data processor and log forwarder, which allows for the collection, processing, and shipping of log data and metrics to multiple destinations. It's designed to be lightweight and efficient, with a small memory footprint, making it suitable for high-performance environments such as cloud-based applications, IoT devices, and large-scale logging solutions. It focuses on receiving and interpreting events which may contain several key-value pair records, applying filters to said records, and routing them to a data sink. It's written in C and is designed to use few dependencies and supports a variety of targets including Linux, macOS, *BSD, and Windows. Fluent Bit is part of the Fluentd Ecosystem of products, which aims to simplify data collection and processing. It acts as a direct successor to the Ruby-written Fluentd, an alternative log and metric processor.
-
-At its core, Fluent Bit operates on a pluggable architecture, supporting a variety of input sources, filters for data processing, and output destinations. This modular design allows users to tailor the data pipeline according to their specific needs.
-\begin{enumerate}
-    \item Input: Fluent Bit starts by collecting data from various sources. These sources can be logs from files, system metrics, or data over the network. The input plugins are responsible for fetching this data and bringing it into Fluent Bit's internal processing pipeline. Common input plugins include tail (for tailing logs from files), mem (for memory metrics), and CPU (for CPU metrics).
-    \item Processing: Once data is collected, it can be processed and transformed using filters. This step is crucial for preparing the data for its final destination, allowing for actions such as adding or removing records, modifying content, or aggregating logs. Processing can involve multiple filters, and Fluent Bit offers a range of filter plugins like grep (for filtering logs based on patterns), modify (for changing log content), and throttle (for limiting data throughput). This is where we can use Fluent Bit's facility to modify record content through a WASM filter plugin is used.
-    \item Buffering: Fluent Bit can buffer data to disk or memory before sending it to the output destination. Buffering is important as it helps in managing data flow, ensuring that data is not lost during transmission spikes or network issues. The buffering mechanism can be configured to adjust the memory and storage usage based on the environment's requirements.
-    \item Output: Finally, the processed and optionally buffered data is sent to one or more destinations. Fluent Bit supports a wide range of output plugins, allowing data to be forwarded to databases, logging services, monitoring tools, or storage systems. Some popular output destinations include Elasticsearch, Kafka, HTTP endpoints, and cloud services like Amazon S3 and Google Cloud Storage.
-\end{enumerate}
-Fluent Bit's lightweight design, flexibility, and portability makes it a popular choice for log and metric collection in various environments. Its ability to scale and handle large volumes of data efficiently, combined with the ease of customization through plugins, has contributed to its widespread adoption in industry.
-
 \section{WebAssembly (WASM)}
 WebAssembly (WASM) is a binary instruction format designed to enable the execution of code compiled from a wide range of programming languages in a cross-architecture manner with improved performance \cite{Webassembly}. The decision to leverage Fluent Bit's built-in support for running Filter and Input plugins using WASM was made early in the project. Fluent Bit provides examples and officially supports the use of Go and Rust for developing Filter plugins.
 
 \subsection{WebAssembly Micro Runtime (WAMR)}
 The \acrfull{wamr} \cite{wamr-about} is a Bytecode Alliance project that offers a lightweight, standalone WebAssembly runtime with a small footprint, high performance, and highly configurable features. It is designed for applications spanning embedded systems, IoT, edge computing, Trusted Execution Environments (TEEs), smart contracts, and cloud-native environments \cite{wamr-docs}.
 
-
-WAMR enables code reuse on the server-side by allowing applications to run WASM programs. It supports multiple execution modes, including interpreter mode, ahead-of-time (AOT) compilation mode, and just-in-time (JIT) compilation modes with LLVM JIT and Fast JIT support \cite{wamr-docs}. The WAMR project consists of four main components:
+It supports multiple execution modes, including interpreter mode, ahead-of-time (AOT) compilation mode, and just-in-time (JIT) compilation modes with LLVM JIT and Fast JIT support \cite{wamr-docs}. The WAMR project consists of four main components:
 
 \begin{enumerate}
     \item The iwasm VM core for executing WASM applications, supporting various execution modes while maintaining high performance, small runtime size, and low memory usage.
@@ -189,13 +176,13 @@ WAMR enables code reuse on the server-side by allowing applications to run WASM 
     \item An application framework that supports remote application management from the host environment through any physical communication channel, featuring a modular design for different managed runtimes.
 \end{enumerate}
 
-WAMR supports a wide range of architectures, including x86, ARM, RISC-V, and others, as well as platforms such as Linux, Windows, and various real-time operating systems. It optionally also offers security features through Intel SGX (Software Guard Extensions) support for application isolation. Fluent Bit however limits WAMR deployment to only build on Linux systems on a defined list of architectures. 
+WAMR supports a wide range of architectures, including x86, ARM, RISC-V, and others, as well as platforms such as Linux, Windows, and various real-time operating systems. It optionally also offers security features through Intel SGX (Software Guard Extensions) support for application isolation. Fluent Bit, however, limits WAMR deployment to only build on Linux systems on a defined list of architectures. 
 
 \subsection{WebAssembly System Interface (WASI)}
-The WebAssembly System Interface (WASI) is a modular system interface that defines a set of standard APIs for WASM modules to interact with the host system. WASI provides a consistent and portable way for WASM applications to access system resources and perform operations such as file I/O, networking, and more, without relying on platform-specific APIs.
+The WebAssembly System Interface (WASI) is a modular system interface that defines a set of standard APIs for WASM modules to interact with the host system. WASI provides a consistent and portable way for WASM applications to access system resources and perform operations such as file I/O, networking, and more, without relying on platform-specific APIs. This is the build target as detailed in later chapters.
 
 \subsection{wamrc}
-wamrc is a command-line tool provided by the WAMR project for ahead-of-time compiling WASM applications using the WAMR runtime environment. It simplifies the process of working with WASM modules and enables developers to leverage the features and optimizations offered by WAMR.
+wamrc is a command-line tool provided by the WAMR project for ahead-of-time compiling WASM applications using the WAMR runtime environment. It simplifies the process of working with WASM modules and enables developers to leverage the features and optimizations offered by WAMR. This is used to provide optional AOT support in the project.
 
 \subsection{Rust and wasm32-wasi Target}
 Rust is a systems programming language with excellent support for generating WASM binaries through its wasm32-wasi target. This target allows Rust code to be compiled into WASM modules that can be executed in WASI-compliant runtimes like WAMR. Functions written in Rust can be compiled to WASM and executed using WAMR or any other WASI-compliant runtime.
@@ -203,4 +190,4 @@ Rust is a systems programming language with excellent support for generating WAS
 \subsection{Fluent Bit and WASM Filter Plugins}
 Fluent Bit, a lightweight log processor and forwarder, supports extending its functionality through plugins written in various languages, including WASM. By leveraging WASM, Fluent Bit can execute filter plugins written in languages like Rust, C, or Go in a secure and sandboxed environment, enabling efficient and cross-platform data processing. This allows developers to write high-performance, portable filter plugins that can be easily integrated into Fluent Bit's data processing pipeline.
 
-The combination of Rust, WASM, and Fluent Bit provides a powerful and flexible foundation for building scalable, efficient, and secure data processing solutions. By compiling Rust code to WASM and executing it within Fluent Bit's WASM runtime, developers can create highly optimized and portable filter plugins that can be deployed across a wide range of architectures and platforms.
+The combination of Rust, WASM, and Fluent Bit provides a powerful and flexible foundation for building scalable, efficient, and secure data processing solutions. By compiling Rust code to WASM and executing it within Fluent Bit's WASM runtime, we can create our filter plugin that can be deployed between a range of architectures and platforms.
